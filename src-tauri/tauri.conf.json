@@ -26,6 +26,11 @@
   },
   "bundle": {
     "active": true,
+    "publisher": "mtplayground",
+    "copyright": "Copyright (c) 2026 mtplayground",
+    "category": "DeveloperTool",
+    "shortDescription": "A local desktop LaTeX workspace.",
+    "longDescription": "wonderfulr-d7e0-texdesk is a native desktop workspace for editing LaTeX course assignments, compiling them with a local TeX toolchain, and previewing the resulting PDF.",
     "targets": "all",
     "icon": []
   }

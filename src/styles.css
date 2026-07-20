@@ -397,6 +397,7 @@ button {
   margin: 8px;
   padding: 8px 10px;
   overflow-wrap: anywhere;
+  white-space: pre-line;
   color: #8a1f1f;
   background: #fff1f1;
   border: 1px solid #f2c5c5;
@@ -718,6 +719,7 @@ button {
   font-size: 0.82rem;
   font-weight: 700;
   line-height: 1.4;
+  white-space: pre-line;
 }
 
 .compile-run-message-success {

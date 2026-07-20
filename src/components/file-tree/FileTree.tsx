@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { displayUserError } from "../../errors/appError";
 import {
   applyTemplateToWorkspace,
   createWorkspaceDirectory,
@@ -34,10 +35,6 @@ function joinPath(parent: string, child: string): string {
 
 function entryParent(entry: FsEntry): string {
   return entry.kind === "directory" ? entry.path : parentPath(entry.path);
-}
-
-function displayError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 export default function FileTree({
@@ -84,7 +81,7 @@ export default function FileTree({
           [path]: entries,
         }));
       } catch (loadError) {
-        setError(displayError(loadError));
+        setError(displayUserError(loadError, "filesystem"));
       } finally {
         setIsLoading(false);
       }
@@ -161,7 +158,7 @@ export default function FileTree({
       }
       await refreshParent(selectedDirectory);
     } catch (createError) {
-      setError(displayError(createError));
+      setError(displayUserError(createError, "filesystem"));
     }
   }
 
@@ -209,7 +206,7 @@ export default function FileTree({
       await refreshParent(selectedDirectory);
       onOpenFile(created.mainFile.path);
     } catch (templateError) {
-      setError(displayError(templateError));
+      setError(displayUserError(templateError, "filesystem"));
     }
   }
 
@@ -245,7 +242,7 @@ export default function FileTree({
       });
       await refreshParent(parent);
     } catch (renameError) {
-      setError(displayError(renameError));
+      setError(displayUserError(renameError, "filesystem"));
     }
   }
 
@@ -277,7 +274,7 @@ export default function FileTree({
       });
       await refreshParent(parent);
     } catch (deleteError) {
-      setError(displayError(deleteError));
+      setError(displayUserError(deleteError, "filesystem"));
     }
   }
 

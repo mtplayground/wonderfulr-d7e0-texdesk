@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { displayUserError } from "../errors/appError";
 import { readWorkspaceFile, writeWorkspaceFile } from "../ipc/client";
 
 type OpenDocument = {
@@ -9,10 +10,6 @@ type OpenDocument = {
 };
 
 type DocumentStatus = "idle" | "loading" | "ready" | "saving" | "error";
-
-function displayError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 export function useDocumentState(workspaceRoot: string | null) {
   const [document, setDocument] = useState<OpenDocument | null>(null);
@@ -49,7 +46,7 @@ export function useDocumentState(workspaceRoot: string | null) {
         setStatus("ready");
       } catch (openError) {
         setStatus("error");
-        setError(displayError(openError));
+        setError(displayUserError(openError, "filesystem"));
       }
     },
     [isDirty, workspaceRoot],
@@ -89,7 +86,7 @@ export function useDocumentState(workspaceRoot: string | null) {
       return true;
     } catch (saveError) {
       setStatus("error");
-      setError(displayError(saveError));
+      setError(displayUserError(saveError, "filesystem"));
       return false;
     }
   }, [document, workspaceRoot]);
