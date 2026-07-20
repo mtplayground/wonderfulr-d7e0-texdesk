@@ -425,7 +425,9 @@ fn binary_name(name: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{compile_document, CompileDocumentRequest, CompileError, CompileStrategy};
+    use super::{
+        compile_document, find_tool, CompileDocumentRequest, CompileError, CompileStrategy,
+    };
     use std::fs;
     use std::path::{Path, PathBuf};
     use std::sync::Mutex;
@@ -436,6 +438,28 @@ mod tests {
     struct TestWorkspace {
         root: PathBuf,
         previous_toolchain_path: Option<String>,
+    }
+
+    struct TempWorkspace {
+        root: PathBuf,
+    }
+
+    impl TempWorkspace {
+        fn new(name: &str) -> Self {
+            let unique = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("test clock should be after Unix epoch")
+                .as_nanos();
+            let root = std::env::temp_dir().join(format!("texdesk-{name}-{unique}"));
+            fs::create_dir_all(&root).expect("create temporary workspace");
+            Self { root }
+        }
+    }
+
+    impl Drop for TempWorkspace {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.root);
+        }
     }
 
     impl TestWorkspace {
@@ -509,6 +533,15 @@ touch "$stem.pdf"
 exit 0
 "#,
         )
+    }
+
+    fn real_latex_toolchain_available() -> bool {
+        let override_path = std::env::var("LATEX_TOOLCHAIN_PATH").ok();
+        let toolchain_path = override_path.as_deref();
+
+        find_tool("latexmk", toolchain_path).is_some()
+            || find_tool("pdflatex", toolchain_path).is_some()
+            || find_tool("xelatex", toolchain_path).is_some()
     }
 
     #[test]
@@ -607,5 +640,54 @@ exit 2
             }
             other => panic!("expected process failure, got {other:?}"),
         }
+    }
+
+    #[test]
+    #[ignore = "requires a real local LaTeX installation on PATH or LATEX_TOOLCHAIN_PATH"]
+    fn e2e_template_edit_compile_preview_pdf() {
+        let _guard = TEST_ENV_LOCK.lock().expect("lock test environment");
+        if !real_latex_toolchain_available() {
+            panic!(
+                "end-to-end compile test requires latexmk, pdflatex, or xelatex on PATH or LATEX_TOOLCHAIN_PATH"
+            );
+        }
+
+        let workspace = TempWorkspace::new("e2e-flow");
+        let course_dir = workspace.root.join("calculus-101");
+        fs::create_dir_all(&course_dir).expect("create course directory");
+
+        let template = r#"\documentclass{article}
+\title{Template Flow}
+\author{TexDesk E2E}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section*{Assignment}
+Template placeholder.
+
+\end{document}
+"#;
+        let edited = template.replace(
+            "Template placeholder.",
+            "Edited end-to-end content with $a^2 + b^2 = c^2$.",
+        );
+        fs::write(course_dir.join("assignment.tex"), edited).expect("write edited template file");
+
+        let result = compile_document(CompileDocumentRequest {
+            workspace_root: workspace.root.display().to_string(),
+            path: "calculus-101/assignment.tex".to_owned(),
+        })
+        .expect("real LaTeX compile should succeed");
+
+        assert_eq!(result.pdf_path, "calculus-101/assignment.pdf");
+        assert!(result.log.contains("$ "));
+
+        let pdf_bytes = fs::read(workspace.root.join(&result.pdf_path)).expect("read compiled PDF");
+        assert!(
+            pdf_bytes.starts_with(b"%PDF"),
+            "compiled output should be a PDF that the preview pane can render"
+        );
     }
 }
