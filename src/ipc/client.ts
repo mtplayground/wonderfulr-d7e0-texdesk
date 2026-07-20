@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 import { getFrontendConfig } from "../config/appConfig";
+import type { CompileDocumentRequest, CompileResult } from "../types/compile";
 import type { AppConfig } from "../types/config";
 import type {
   CreateFileRequest,
@@ -22,6 +23,7 @@ import {
 } from "../types/sync";
 
 type CommandName =
+  | "compile_document"
   | "create_workspace_directory"
   | "create_workspace_file"
   | "delete_workspace_entry"
@@ -156,6 +158,12 @@ export function deleteWorkspaceEntry(
   request: WorkspacePathRequest,
 ): Promise<DeleteResult> {
   return invokeCommand<DeleteResult>("delete_workspace_entry", { request });
+}
+
+export function compileDocument(
+  request: CompileDocumentRequest,
+): Promise<CompileResult> {
+  return invokeCommand<CompileResult>("compile_document", { request });
 }
 
 export function startWorkspaceWatcher(

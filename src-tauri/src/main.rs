@@ -1,4 +1,5 @@
 mod commands;
+mod compile;
 mod config;
 mod fs;
 mod store;
@@ -13,6 +14,7 @@ fn main() -> tauri::Result<()> {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::compile_document,
             commands::create_workspace_directory,
             commands::create_workspace_file,
             commands::delete_workspace_entry,

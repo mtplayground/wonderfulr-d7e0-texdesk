@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
+use crate::compile::{CompileDocumentRequest, CompileError, CompileResult};
 use crate::config::AppConfig;
 use crate::fs::{
     CreateFileRequest, DeleteResult, FileContent, FsEntry, FsError, ListWorkspaceRequest,
@@ -59,6 +60,15 @@ impl From<FsError> for CommandError {
 
 impl From<WatcherError> for CommandError {
     fn from(error: WatcherError) -> Self {
+        Self {
+            code: error.code().to_owned(),
+            message: error.to_string(),
+        }
+    }
+}
+
+impl From<CompileError> for CommandError {
+    fn from(error: CompileError) -> Self {
         Self {
             code: error.code().to_owned(),
             message: error.to_string(),
@@ -149,6 +159,11 @@ pub fn rename_workspace_entry(request: RenameEntryRequest) -> CommandResult<FsEn
 #[tauri::command]
 pub fn delete_workspace_entry(request: WorkspacePathRequest) -> CommandResult<DeleteResult> {
     crate::fs::delete_entry(request).map_err(CommandError::from)
+}
+
+#[tauri::command]
+pub fn compile_document(request: CompileDocumentRequest) -> CommandResult<CompileResult> {
+    crate::compile::compile_document(request).map_err(CommandError::from)
 }
 
 #[tauri::command]
