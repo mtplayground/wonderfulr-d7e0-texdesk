@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
+  applyTemplateToWorkspace,
   createWorkspaceDirectory,
   createWorkspaceFile,
   deleteWorkspaceEntry,
+  listTemplates,
   listWorkspaceEntries,
   renameWorkspaceEntry,
 } from "../../ipc/client";
 import type { FsEntry } from "../../types/fs";
+import type { Template } from "../../types/templates";
 
 type FileTreeProps = {
   activePath: string | null;
@@ -48,6 +51,7 @@ export default function FileTree({
     () => new Set([ROOT_PATH]),
   );
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const [templates, setTemplates] = useState<Template[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -159,6 +163,56 @@ export default function FileTree({
       await refreshParent(selectedDirectory);
     } catch (createError) {
       setError(displayError(createError));
+    }
+  }
+
+  async function createFromTemplate() {
+    if (!workspaceRoot) {
+      return;
+    }
+
+    setError(null);
+    try {
+      const availableTemplates =
+        templates.length > 0 ? templates : await listTemplates();
+      setTemplates(availableTemplates);
+      if (availableTemplates.length === 0) {
+        setError("No templates are available");
+        return;
+      }
+
+      const templateChoice = window.prompt(
+        `Template\n${availableTemplates
+          .map((template, index) => `${index + 1}. ${template.name}`)
+          .join("\n")}`,
+        "1",
+      );
+      const selectedTemplate = templateFromChoice(availableTemplates, templateChoice);
+      if (!selectedTemplate) {
+        return;
+      }
+
+      const rawName = window.prompt(
+        "Assignment file name",
+        selectedTemplate.mainFileName,
+      );
+      const assignmentName = rawName?.trim();
+      if (!assignmentName) {
+        return;
+      }
+
+      const created = await applyTemplateToWorkspace({
+        workspaceRoot,
+        targetDirectory: selectedDirectory,
+        templateId: selectedTemplate.id,
+        assignmentName,
+      });
+      setSelectedPath(created.mainFile.path);
+      setExpandedPaths((current) => new Set(current).add(selectedDirectory));
+      await refreshParent(selectedDirectory);
+      onOpenFile(created.mainFile.path);
+    } catch (templateError) {
+      setError(displayError(templateError));
     }
   }
 
@@ -281,6 +335,13 @@ export default function FileTree({
         </button>
         <button
           type="button"
+          title="New from template"
+          onClick={() => void createFromTemplate()}
+        >
+          T
+        </button>
+        <button
+          type="button"
           title="Rename"
           disabled={!selectedEntry}
           onClick={() => void renameSelected()}
@@ -305,4 +366,21 @@ export default function FileTree({
       </nav>
     </div>
   );
+}
+
+function templateFromChoice(
+  templates: Template[],
+  choice: string | null,
+): Template | null {
+  const trimmed = choice?.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const selectedIndex = Number(trimmed);
+  if (Number.isInteger(selectedIndex)) {
+    return templates[selectedIndex - 1] ?? null;
+  }
+
+  return templates.find((template) => template.id === trimmed) ?? null;
 }

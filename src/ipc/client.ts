@@ -21,9 +21,14 @@ import {
   type WorkspaceChangeEvent,
   type WorkspaceWatchStatus,
 } from "../types/sync";
-import type { Template } from "../types/templates";
+import type {
+  AppliedTemplate,
+  ApplyTemplateRequest,
+  Template,
+} from "../types/templates";
 
 type CommandName =
+  | "apply_template_to_workspace"
   | "compile_document"
   | "create_workspace_directory"
   | "create_workspace_file"
@@ -126,6 +131,12 @@ export function listRecentProjects(limit = 10): Promise<RecentProject[]> {
 
 export function listTemplates(): Promise<Template[]> {
   return invokeCommand<Template[]>("list_templates");
+}
+
+export function applyTemplateToWorkspace(
+  request: ApplyTemplateRequest,
+): Promise<AppliedTemplate> {
+  return invokeCommand<AppliedTemplate>("apply_template_to_workspace", { request });
 }
 
 export function listWorkspaceEntries(

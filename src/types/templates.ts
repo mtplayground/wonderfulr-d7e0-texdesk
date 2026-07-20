@@ -1,3 +1,5 @@
+import type { FsEntry } from "./fs";
+
 export type Template = {
   id: string;
   name: string;
@@ -9,4 +11,16 @@ export type Template = {
   isDefault: boolean;
   createdAt: string;
   updatedAt: string;
+};
+
+export type ApplyTemplateRequest = {
+  workspaceRoot: string;
+  targetDirectory: string;
+  templateId: string;
+  assignmentName: string;
+};
+
+export type AppliedTemplate = {
+  mainFile: FsEntry;
+  bibliographyFile: FsEntry | null;
 };
