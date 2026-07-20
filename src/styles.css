@@ -149,7 +149,8 @@ button {
   border-color: #f1d288;
 }
 
-.editor-save-button {
+.editor-save-button,
+.editor-compile-button {
   height: 28px;
   padding: 0 10px;
   color: #243047;
@@ -161,15 +162,47 @@ button {
 }
 
 .editor-save-button:hover:not(:disabled),
-.editor-save-button:focus-visible {
+.editor-save-button:focus-visible,
+.editor-compile-button:hover:not(:disabled),
+.editor-compile-button:focus-visible {
   background: #eaf0f8;
   border-color: #9db2cd;
   outline: none;
 }
 
-.editor-save-button:disabled {
+.editor-save-button:disabled,
+.editor-compile-button:disabled {
   cursor: not-allowed;
   opacity: 0.5;
+}
+
+.compile-status {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  color: #475569;
+  background: #eef2f6;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.compile-status-running {
+  color: #1d4ed8;
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+
+.compile-status-success {
+  color: #256047;
+  background: #e7f7ef;
+  border-color: #a8dec1;
+}
+
+.compile-status-failure {
+  color: #8a1f1f;
+  background: #fff1f1;
+  border-color: #f2c5c5;
 }
 
 .pane-resizer {
@@ -361,6 +394,29 @@ button {
   border-top: 1px solid #f1d288;
   font-size: 0.82rem;
   font-weight: 700;
+}
+
+.compile-run-message {
+  flex: 0 0 auto;
+  max-height: 86px;
+  padding: 8px 18px;
+  overflow: auto;
+  border-top: 1px solid;
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.compile-run-message-success {
+  color: #256047;
+  background: #e7f7ef;
+  border-color: #a8dec1;
+}
+
+.compile-run-message-failure {
+  color: #8a1f1f;
+  background: #fff1f1;
+  border-color: #f2c5c5;
 }
 
 .workspace-pane-preview {

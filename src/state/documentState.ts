@@ -61,7 +61,7 @@ export function useDocumentState(workspaceRoot: string | null) {
 
   const saveDocument = useCallback(async () => {
     if (!workspaceRoot || !document) {
-      return;
+      return false;
     }
 
     setStatus("saving");
@@ -86,9 +86,11 @@ export function useDocumentState(workspaceRoot: string | null) {
       );
       setExternalChangePath(null);
       setStatus("ready");
+      return true;
     } catch (saveError) {
       setStatus("error");
       setError(displayError(saveError));
+      return false;
     }
   }, [document, workspaceRoot]);
 
