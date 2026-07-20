@@ -13,6 +13,7 @@ import { usePaneLayout } from "../../state/layoutState";
 import { useWorkspaceSync } from "../../state/workspaceSync";
 import CodeMirrorEditor from "../editor/CodeMirrorEditor";
 import FileTree from "../file-tree/FileTree";
+import PdfPreview from "../preview/PdfPreview";
 
 function PaneResizer({
   label,
@@ -67,6 +68,8 @@ export default function ThreePaneLayout() {
     storeStatus.status === "ready" && storeStatus.store
       ? `Store v${storeStatus.store.schemaVersion}`
       : "Local store";
+  const previewPdfPath = compileState.runState.result?.pdfPath ?? null;
+  const previewRefreshKey = compileState.runState.finishedAt;
 
   useEffect(() => {
     if (appConfig.status !== "ready") {
@@ -244,17 +247,14 @@ export default function ThreePaneLayout() {
           <div>
             <p className="pane-kicker">Preview</p>
             <h2>PDF</h2>
-            <p className="pane-subtitle">{toolchainLabel}</p>
+            <p className="pane-subtitle">{previewPdfPath ?? toolchainLabel}</p>
           </div>
         </header>
-        <div className="preview-sheet" aria-label="PDF preview placeholder">
-          <div className="preview-line preview-line-wide" />
-          <div className="preview-line" />
-          <div className="preview-line preview-line-short" />
-          <div className="preview-block" />
-          <div className="preview-line" />
-          <div className="preview-line preview-line-wide" />
-        </div>
+        <PdfPreview
+          pdfPath={previewPdfPath}
+          refreshKey={previewRefreshKey}
+          workspaceRoot={workspaceRoot}
+        />
       </aside>
     </main>
   );
