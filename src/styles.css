@@ -80,6 +80,10 @@ button {
   background: #ffffff;
 }
 
+.pane-header > div {
+  min-width: 0;
+}
+
 .pane-kicker,
 .pane-subtitle,
 .pane-header h1,
@@ -98,9 +102,12 @@ button {
 
 .pane-header h1,
 .pane-header h2 {
+  overflow: hidden;
   color: #111827;
   font-size: 1rem;
   line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pane-subtitle {
@@ -118,15 +125,51 @@ button {
   padding-inline: 18px;
 }
 
+.editor-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
 .file-status {
   flex: 0 0 auto;
   padding: 5px 8px;
-  color: #7a4d11;
-  background: #fff4d6;
-  border: 1px solid #f1d288;
+  color: #256047;
+  background: #e7f7ef;
+  border: 1px solid #a8dec1;
   border-radius: 6px;
   font-size: 0.76rem;
   font-weight: 700;
+}
+
+.file-status.is-dirty {
+  color: #7a4d11;
+  background: #fff4d6;
+  border-color: #f1d288;
+}
+
+.editor-save-button {
+  height: 28px;
+  padding: 0 10px;
+  color: #243047;
+  background: #ffffff;
+  border: 1px solid #cfd8e5;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.editor-save-button:hover:not(:disabled),
+.editor-save-button:focus-visible {
+  background: #eaf0f8;
+  border-color: #9db2cd;
+  outline: none;
+}
+
+.editor-save-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .pane-resizer {
@@ -274,30 +317,29 @@ button {
   text-overflow: ellipsis;
 }
 
-.editor-surface {
+.editor-textarea {
   flex: 1;
+  width: 100%;
   min-height: 0;
+  resize: none;
   overflow: auto;
   padding: 18px;
+  color: #182235;
   background:
     linear-gradient(90deg, #f1f4f8 1px, transparent 1px) 0 0 / 52px 52px,
     #ffffff;
-}
-
-.editor-surface pre {
-  min-height: 100%;
-  margin: 0;
-  padding: 18px 20px;
-  color: #182235;
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid #d9e0ea;
-  border-radius: 8px;
+  border: 0;
+  outline: none;
   font-family:
     "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
   font-size: 0.95rem;
   line-height: 1.7;
   letter-spacing: 0;
   white-space: pre-wrap;
+}
+
+.editor-textarea:disabled {
+  color: #607089;
 }
 
 .workspace-pane-preview {

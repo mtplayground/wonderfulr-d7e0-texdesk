@@ -1,7 +1,8 @@
 import { useAppConfig } from "../../config/useAppConfig";
 import { useStoreStatus } from "../../config/useStoreStatus";
-import FileTree from "../file-tree/FileTree";
+import { useDocumentState } from "../../state/documentState";
 import { usePaneLayout } from "../../state/layoutState";
+import FileTree from "../file-tree/FileTree";
 
 function PaneResizer({
   label,
@@ -24,9 +25,12 @@ export default function ThreePaneLayout() {
   const { containerRef, layout, beginResize, resizeHandlers } = usePaneLayout();
   const appConfig = useAppConfig();
   const storeStatus = useStoreStatus();
+  const workspaceRoot =
+    appConfig.status === "ready" ? appConfig.config.defaultWorkspaceRoot : null;
+  const documentState = useDocumentState(workspaceRoot);
   const workspaceLabel =
-    appConfig.status === "ready" && appConfig.config.defaultWorkspaceRoot
-      ? appConfig.config.defaultWorkspaceRoot
+    workspaceRoot
+      ? workspaceRoot
       : "No workspace selected";
   const toolchainLabel =
     appConfig.status === "ready" && appConfig.config.latexToolchainPath
@@ -55,9 +59,9 @@ export default function ThreePaneLayout() {
           </div>
         </header>
         <FileTree
-          workspaceRoot={
-            appConfig.status === "ready" ? appConfig.config.defaultWorkspaceRoot : null
-          }
+          activePath={documentState.document?.path ?? null}
+          onOpenFile={(path) => void documentState.openDocument(path)}
+          workspaceRoot={workspaceRoot}
         />
       </aside>
 
@@ -72,21 +76,32 @@ export default function ThreePaneLayout() {
         <header className="pane-header editor-header">
           <div>
             <p className="pane-kicker">Editor</p>
-            <h2>assignment.tex</h2>
-            <p className="pane-subtitle">{storeLabel}</p>
+            <h2>{documentState.document?.path ?? "No document"}</h2>
+            <p className="pane-subtitle">{documentState.error ?? storeLabel}</p>
           </div>
-          <span className="file-status">Unsaved</span>
+          <div className="editor-actions">
+            <span className={`file-status${documentState.isDirty ? " is-dirty" : ""}`}>
+              {documentState.isDirty ? "Unsaved" : "Saved"}
+            </span>
+            <button
+              type="button"
+              className="editor-save-button"
+              disabled={!documentState.document || !documentState.isDirty}
+              onClick={() => void documentState.saveDocument()}
+            >
+              Save
+            </button>
+          </div>
         </header>
-        <div className="editor-surface" aria-label="Document editor placeholder">
-          <pre>{String.raw`\documentclass{article}
-\begin{document}
-
-\section{Problem Set}
-
-Start writing here.
-
-\end{document}`}</pre>
-        </div>
+        <textarea
+          className="editor-textarea"
+          aria-label="Document editor"
+          disabled={!documentState.document || documentState.status === "loading"}
+          value={documentState.document?.contents ?? ""}
+          placeholder="Select a .tex file"
+          spellCheck={false}
+          onChange={(event) => documentState.updateContents(event.target.value)}
+        />
       </section>
 
       <PaneResizer
