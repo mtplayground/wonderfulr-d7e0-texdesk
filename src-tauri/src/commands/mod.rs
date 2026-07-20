@@ -7,6 +7,9 @@ use crate::fs::{
     RenameEntryRequest, WorkspacePathRequest, WriteFileRequest,
 };
 use crate::store::{Store, StoreError, StoreStatus};
+use crate::watcher::{
+    WatchWorkspaceRequest, WatcherError, WorkspaceWatchStatus, WorkspaceWatcherState,
+};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -28,6 +31,15 @@ impl From<StoreError> for CommandError {
 
 impl From<FsError> for CommandError {
     fn from(error: FsError) -> Self {
+        Self {
+            code: error.code().to_owned(),
+            message: error.to_string(),
+        }
+    }
+}
+
+impl From<WatcherError> for CommandError {
+    fn from(error: WatcherError) -> Self {
         Self {
             code: error.code().to_owned(),
             message: error.to_string(),
@@ -83,4 +95,29 @@ pub fn rename_workspace_entry(request: RenameEntryRequest) -> CommandResult<FsEn
 #[tauri::command]
 pub fn delete_workspace_entry(request: WorkspacePathRequest) -> CommandResult<DeleteResult> {
     crate::fs::delete_entry(request).map_err(CommandError::from)
+}
+
+#[tauri::command]
+pub fn start_workspace_watcher(
+    app_handle: tauri::AppHandle,
+    request: WatchWorkspaceRequest,
+    watcher: State<'_, WorkspaceWatcherState>,
+) -> CommandResult<WorkspaceWatchStatus> {
+    watcher
+        .start(app_handle, request)
+        .map_err(CommandError::from)
+}
+
+#[tauri::command]
+pub fn stop_workspace_watcher(
+    watcher: State<'_, WorkspaceWatcherState>,
+) -> CommandResult<WorkspaceWatchStatus> {
+    watcher.stop().map_err(CommandError::from)
+}
+
+#[tauri::command]
+pub fn get_workspace_watcher_status(
+    watcher: State<'_, WorkspaceWatcherState>,
+) -> CommandResult<WorkspaceWatchStatus> {
+    watcher.status().map_err(CommandError::from)
 }

@@ -12,6 +12,7 @@ import type { FsEntry } from "../../types/fs";
 type FileTreeProps = {
   activePath: string | null;
   onOpenFile: (path: string) => void;
+  refreshKey: number;
   workspaceRoot: string | null;
 };
 
@@ -39,6 +40,7 @@ function displayError(error: unknown): string {
 export default function FileTree({
   activePath,
   onOpenFile,
+  refreshKey,
   workspaceRoot,
 }: FileTreeProps) {
   const [entriesByPath, setEntriesByPath] = useState<EntriesByPath>({});
@@ -97,6 +99,16 @@ export default function FileTree({
       void loadDirectory(ROOT_PATH);
     }
   }, [loadDirectory, workspaceRoot]);
+
+  useEffect(() => {
+    if (!workspaceRoot || refreshKey === 0) {
+      return;
+    }
+
+    for (const path of expandedPaths) {
+      void loadDirectory(path);
+    }
+  }, [loadDirectory, refreshKey, workspaceRoot]);
 
   async function refreshParent(path: string) {
     await loadDirectory(path);

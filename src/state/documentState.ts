@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { readWorkspaceFile, writeWorkspaceFile } from "../ipc/client";
 
@@ -18,6 +18,8 @@ export function useDocumentState(workspaceRoot: string | null) {
   const [document, setDocument] = useState<OpenDocument | null>(null);
   const [status, setStatus] = useState<DocumentStatus>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [externalChangePath, setExternalChangePath] = useState<string | null>(null);
+  const lastLocalSave = useRef<{ path: string; savedAt: number } | null>(null);
 
   const isDirty = useMemo(
     () => Boolean(document && document.contents !== document.savedContents),
@@ -43,6 +45,7 @@ export function useDocumentState(workspaceRoot: string | null) {
           contents: file.contents,
           savedContents: file.contents,
         });
+        setExternalChangePath(null);
         setStatus("ready");
       } catch (openError) {
         setStatus("error");
@@ -69,6 +72,10 @@ export function useDocumentState(workspaceRoot: string | null) {
         path: document.path,
         contents: document.contents,
       });
+      lastLocalSave.current = {
+        path: document.path,
+        savedAt: Date.now(),
+      };
       setDocument((current) =>
         current
           ? {
@@ -77,6 +84,7 @@ export function useDocumentState(workspaceRoot: string | null) {
             }
           : current,
       );
+      setExternalChangePath(null);
       setStatus("ready");
     } catch (saveError) {
       setStatus("error");
@@ -102,11 +110,33 @@ export function useDocumentState(workspaceRoot: string | null) {
     setDocument(null);
     setStatus("idle");
     setError(null);
+    setExternalChangePath(null);
   }, [workspaceRoot]);
+
+  const handleWorkspaceChange = useCallback(
+    (paths: string[]) => {
+      if (!document || !paths.includes(document.path)) {
+        return;
+      }
+
+      const localSave = lastLocalSave.current;
+      if (
+        localSave?.path === document.path &&
+        Date.now() - localSave.savedAt < 1500
+      ) {
+        return;
+      }
+
+      setExternalChangePath(document.path);
+    },
+    [document],
+  );
 
   return {
     document,
     error,
+    externalChangePath,
+    handleWorkspaceChange,
     isDirty,
     openDocument,
     saveDocument,
