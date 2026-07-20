@@ -1,4 +1,5 @@
 import { useAppConfig } from "../../config/useAppConfig";
+import { useStoreStatus } from "../../config/useStoreStatus";
 import { usePaneLayout } from "../../state/layoutState";
 
 function PaneResizer({
@@ -21,6 +22,7 @@ function PaneResizer({
 export default function ThreePaneLayout() {
   const { containerRef, layout, beginResize, resizeHandlers } = usePaneLayout();
   const appConfig = useAppConfig();
+  const storeStatus = useStoreStatus();
   const workspaceLabel =
     appConfig.status === "ready" && appConfig.config.defaultWorkspaceRoot
       ? appConfig.config.defaultWorkspaceRoot
@@ -29,6 +31,10 @@ export default function ThreePaneLayout() {
     appConfig.status === "ready" && appConfig.config.latexToolchainPath
       ? appConfig.config.latexToolchainPath
       : "System LaTeX";
+  const storeLabel =
+    storeStatus.status === "ready" && storeStatus.store
+      ? `Store v${storeStatus.store.schemaVersion}`
+      : "Local store";
 
   return (
     <main
@@ -75,6 +81,7 @@ export default function ThreePaneLayout() {
           <div>
             <p className="pane-kicker">Editor</p>
             <h2>assignment.tex</h2>
+            <p className="pane-subtitle">{storeLabel}</p>
           </div>
           <span className="file-status">Unsaved</span>
         </header>

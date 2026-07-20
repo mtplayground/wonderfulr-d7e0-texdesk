@@ -2,8 +2,9 @@ import { invoke } from "@tauri-apps/api/core";
 
 import { getFrontendConfig } from "../config/appConfig";
 import type { AppConfig } from "../types/config";
+import type { StoreStatus } from "../types/store";
 
-type CommandName = "get_app_config" | "ping";
+type CommandName = "get_app_config" | "get_store_status" | "ping";
 
 export type IpcError = {
   code: string;
@@ -44,4 +45,12 @@ export async function getAppConfig(): Promise<AppConfig> {
 
 export async function pingCore(): Promise<string> {
   return invokeCommand<string>("ping");
+}
+
+export async function getStoreStatus(): Promise<StoreStatus | null> {
+  try {
+    return await invokeCommand<StoreStatus>("get_store_status");
+  } catch {
+    return null;
+  }
 }
