@@ -9,6 +9,8 @@ use tauri::{AppHandle, Manager};
 const DATABASE_FILE_NAME: &str = "texdesk.sqlite3";
 const INITIAL_MIGRATION: &str = include_str!("../../migrations/001_initial_store.sql");
 const TEMPLATE_ID_PREFIX: &str = "template-";
+const SNIPPET_SEEDED_STATE_KEY: &str = "snippets_seeded";
+const TEMPLATE_SEEDED_STATE_KEY: &str = "templates_seeded";
 
 #[derive(Debug)]
 pub enum StoreError {
@@ -133,6 +135,20 @@ pub struct TemplateInput {
     pub bibliography: Option<String>,
 }
 
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Snippet {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub category: String,
+    pub trigger: String,
+    pub body: String,
+    pub is_default: bool,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
 struct DefaultTemplate {
     id: &'static str,
     name: &'static str,
@@ -141,6 +157,15 @@ struct DefaultTemplate {
     main_file_name: &'static str,
     body: &'static str,
     bibliography: Option<&'static str>,
+}
+
+struct DefaultSnippet {
+    id: &'static str,
+    name: &'static str,
+    description: &'static str,
+    category: &'static str,
+    trigger: &'static str,
+    body: &'static str,
 }
 
 struct CleanTemplateInput {
@@ -433,6 +458,45 @@ impl Store {
         Ok(id.to_owned())
     }
 
+    pub fn snippets(&self) -> Result<Vec<Snippet>, StoreError> {
+        let connection = self.connection()?;
+        let mut statement = connection
+            .prepare(
+                "SELECT id,
+                        name,
+                        description,
+                        category,
+                        trigger,
+                        body,
+                        is_default,
+                        created_at,
+                        updated_at
+                 FROM snippets
+                 ORDER BY category ASC, name ASC",
+            )
+            .map_err(StoreError::Query)?;
+        let rows = statement
+            .query_map([], |row| {
+                Ok(Snippet {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    description: row.get(2)?,
+                    category: row.get(3)?,
+                    trigger: row.get(4)?,
+                    body: row.get(5)?,
+                    is_default: row.get::<_, i64>(6)? != 0,
+                    created_at: row.get(7)?,
+                    updated_at: row.get(8)?,
+                })
+            })
+            .map_err(StoreError::Query)?;
+        let mut snippets = Vec::new();
+        for row in rows {
+            snippets.push(row.map_err(StoreError::Query)?);
+        }
+        Ok(snippets)
+    }
+
     fn connection(&self) -> Result<Connection, StoreError> {
         open_database(&self.database_path)
     }
@@ -443,7 +507,9 @@ impl Store {
             .execute_batch(INITIAL_MIGRATION)
             .map_err(StoreError::Migration)?;
         ensure_template_schema(&connection).map_err(StoreError::Migration)?;
+        ensure_snippet_schema(&connection).map_err(StoreError::Migration)?;
         seed_default_templates(&connection).map_err(StoreError::Migration)?;
+        seed_default_snippets(&connection).map_err(StoreError::Migration)?;
         Ok(())
     }
 
@@ -512,6 +578,32 @@ fn ensure_template_schema(connection: &Connection) -> Result<(), rusqlite::Error
     Ok(())
 }
 
+fn ensure_snippet_schema(connection: &Connection) -> Result<(), rusqlite::Error> {
+    if !table_has_column(connection, "snippets", "category")? {
+        connection.execute(
+            "ALTER TABLE snippets ADD COLUMN category TEXT NOT NULL DEFAULT 'general'",
+            [],
+        )?;
+    }
+    if !table_has_column(connection, "snippets", "trigger")? {
+        connection.execute(
+            "ALTER TABLE snippets ADD COLUMN trigger TEXT NOT NULL DEFAULT ''",
+            [],
+        )?;
+    }
+    if !table_has_column(connection, "snippets", "is_default")? {
+        connection.execute(
+            "ALTER TABLE snippets ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0 CHECK (is_default IN (0, 1))",
+            [],
+        )?;
+    }
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_snippets_category ON snippets (category, name)",
+        [],
+    )?;
+    Ok(())
+}
+
 fn table_has_column(
     connection: &Connection,
     table_name: &str,
@@ -530,15 +622,7 @@ fn table_has_column(
 }
 
 fn seed_default_templates(connection: &Connection) -> Result<(), rusqlite::Error> {
-    let already_seeded = connection
-        .query_row(
-            "SELECT value FROM app_state WHERE key = 'templates_seeded'",
-            [],
-            |row| row.get::<_, String>(0),
-        )
-        .optional()?
-        .is_some();
-    if already_seeded {
+    if app_state_key_exists(connection, TEMPLATE_SEEDED_STATE_KEY)? {
         return Ok(());
     }
 
@@ -571,12 +655,63 @@ fn seed_default_templates(connection: &Connection) -> Result<(), rusqlite::Error
     }
     connection.execute(
         "INSERT INTO app_state (key, value, updated_at)
-         VALUES ('templates_seeded', 'true', CURRENT_TIMESTAMP)
+         VALUES (?1, 'true', CURRENT_TIMESTAMP)
          ON CONFLICT(key)
          DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP",
-        [],
+        params![TEMPLATE_SEEDED_STATE_KEY],
     )?;
     Ok(())
+}
+
+fn seed_default_snippets(connection: &Connection) -> Result<(), rusqlite::Error> {
+    if app_state_key_exists(connection, SNIPPET_SEEDED_STATE_KEY)? {
+        return Ok(());
+    }
+
+    for snippet in DEFAULT_SNIPPETS {
+        connection.execute(
+            "INSERT INTO snippets (
+                id,
+                name,
+                description,
+                category,
+                trigger,
+                body,
+                is_default,
+                created_at,
+                updated_at
+             )
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+             ON CONFLICT(id) DO NOTHING",
+            params![
+                snippet.id,
+                snippet.name,
+                snippet.description,
+                snippet.category,
+                snippet.trigger,
+                snippet.body,
+            ],
+        )?;
+    }
+    connection.execute(
+        "INSERT INTO app_state (key, value, updated_at)
+         VALUES (?1, 'true', CURRENT_TIMESTAMP)
+         ON CONFLICT(key)
+         DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP",
+        params![SNIPPET_SEEDED_STATE_KEY],
+    )?;
+    Ok(())
+}
+
+fn app_state_key_exists(connection: &Connection, key: &str) -> Result<bool, rusqlite::Error> {
+    connection
+        .query_row(
+            "SELECT value FROM app_state WHERE key = ?1",
+            params![key],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map(|value| value.is_some())
 }
 
 fn required_field(value: String, label: &str) -> Result<String, StoreError> {
@@ -814,5 +949,72 @@ Explain the implications, limitations, and next steps.
 \end{document}
 "#,
         bibliography: None,
+    },
+];
+
+const DEFAULT_SNIPPETS: &[DefaultSnippet] = &[
+    DefaultSnippet {
+        id: "equation-align",
+        name: "Aligned Equation",
+        description: "Multi-line aligned equation block for derivations.",
+        category: "equation",
+        trigger: "align",
+        body: r#"\begin{align}
+  a &= b + c \\
+  &= d.
+\end{align}
+"#,
+    },
+    DefaultSnippet {
+        id: "table-basic",
+        name: "Basic Table",
+        description: "Centered table with caption, label, header row, and horizontal rules.",
+        category: "table",
+        trigger: "table",
+        body: r#"\begin{table}[h]
+  \centering
+  \caption{Table caption}
+  \label{tab:label}
+  \begin{tabular}{lrr}
+    \hline
+    Item & Value & Error \\
+    \hline
+    Sample A & 1.23 & 0.04 \\
+    Sample B & 2.34 & 0.05 \\
+    \hline
+  \end{tabular}
+\end{table}
+"#,
+    },
+    DefaultSnippet {
+        id: "figure-block",
+        name: "Figure Block",
+        description: "Figure environment with an included graphic, caption, and label.",
+        category: "figure",
+        trigger: "figure",
+        body: r#"\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.8\linewidth]{figures/example}
+  \caption{Figure caption}
+  \label{fig:label}
+\end{figure}
+"#,
+    },
+    DefaultSnippet {
+        id: "bibliography-article",
+        name: "BibTeX Article Entry",
+        description: "BibTeX article entry with common citation fields.",
+        category: "bibliography",
+        trigger: "bibarticle",
+        body: r#"@article{key,
+  author = {Author Name},
+  title = {Article Title},
+  journal = {Journal Name},
+  year = {2026},
+  volume = {1},
+  number = {1},
+  pages = {1--10}
+}
+"#,
     },
 ];

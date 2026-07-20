@@ -16,6 +16,7 @@ import type {
 } from "../types/fs";
 import type { StoreStatus } from "../types/store";
 import type { RecentProject, WorkspaceState } from "../types/persistence";
+import type { Snippet } from "../types/snippets";
 import {
   WORKSPACE_CHANGED_EVENT,
   type WorkspaceChangeEvent,
@@ -42,6 +43,7 @@ type CommandName =
   | "get_workspace_state"
   | "list_workspace_entries"
   | "list_recent_projects"
+  | "list_snippets"
   | "list_templates"
   | "ping"
   | "read_workspace_file"
@@ -135,6 +137,10 @@ export function listRecentProjects(limit = 10): Promise<RecentProject[]> {
 
 export function listTemplates(): Promise<Template[]> {
   return invokeCommand<Template[]>("list_templates");
+}
+
+export function listSnippets(): Promise<Snippet[]> {
+  return invokeCommand<Snippet[]>("list_snippets");
 }
 
 export function applyTemplateToWorkspace(
