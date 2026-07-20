@@ -11,6 +11,7 @@ import { useCompileState } from "../../state/compileState";
 import { useDocumentState } from "../../state/documentState";
 import { usePaneLayout } from "../../state/layoutState";
 import { useWorkspaceSync } from "../../state/workspaceSync";
+import CompileLogPanel from "../compile/CompileLogPanel";
 import CodeMirrorEditor from "../editor/CodeMirrorEditor";
 import FileTree from "../file-tree/FileTree";
 import PdfPreview from "../preview/PdfPreview";
@@ -233,6 +234,7 @@ export default function ThreePaneLayout() {
             {compileState.runState.error}
           </div>
         ) : null}
+        <CompileLogPanel runState={compileState.runState} />
       </section>
 
       <PaneResizer
