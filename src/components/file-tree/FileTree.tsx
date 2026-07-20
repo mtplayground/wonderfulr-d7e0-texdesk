@@ -51,7 +51,6 @@ export default function FileTree({
     () => new Set([ROOT_PATH]),
   );
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
-  const [templates, setTemplates] = useState<Template[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -173,9 +172,7 @@ export default function FileTree({
 
     setError(null);
     try {
-      const availableTemplates =
-        templates.length > 0 ? templates : await listTemplates();
-      setTemplates(availableTemplates);
+      const availableTemplates = await listTemplates();
       if (availableTemplates.length === 0) {
         setError("No templates are available");
         return;

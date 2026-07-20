@@ -7,7 +7,9 @@ use crate::fs::{
     CreateFileRequest, DeleteResult, FileContent, FsEntry, FsError, ListWorkspaceRequest,
     RenameEntryRequest, WorkspacePathRequest, WriteFileRequest,
 };
-use crate::store::{RecentProject, Store, StoreError, StoreStatus, Template, WorkspaceState};
+use crate::store::{
+    RecentProject, Store, StoreError, StoreStatus, Template, TemplateInput, WorkspaceState,
+};
 use crate::watcher::{
     WatchWorkspaceRequest, WatcherError, WorkspaceWatchStatus, WorkspaceWatcherState,
 };
@@ -54,6 +56,24 @@ pub struct ApplyTemplateRequest {
 pub struct AppliedTemplate {
     pub main_file: FsEntry,
     pub bibliography_file: Option<FsEntry>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveTemplateRequest {
+    pub template: TemplateInput,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteTemplateRequest {
+    pub id: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteTemplateResult {
+    pub deleted_id: String,
 }
 
 impl From<StoreError> for CommandError {
@@ -145,6 +165,27 @@ pub fn list_recent_projects(
 #[tauri::command]
 pub fn list_templates(store: State<'_, Store>) -> CommandResult<Vec<Template>> {
     store.templates().map_err(CommandError::from)
+}
+
+#[tauri::command]
+pub fn save_template(
+    request: SaveTemplateRequest,
+    store: State<'_, Store>,
+) -> CommandResult<Template> {
+    store
+        .save_template(request.template)
+        .map_err(CommandError::from)
+}
+
+#[tauri::command]
+pub fn delete_template(
+    request: DeleteTemplateRequest,
+    store: State<'_, Store>,
+) -> CommandResult<DeleteTemplateResult> {
+    store
+        .delete_template(&request.id)
+        .map(|deleted_id| DeleteTemplateResult { deleted_id })
+        .map_err(CommandError::from)
 }
 
 #[tauri::command]

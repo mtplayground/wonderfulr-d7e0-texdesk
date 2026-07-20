@@ -1,12 +1,14 @@
 use rusqlite::{params, Connection, OptionalExtension};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager};
 
 const DATABASE_FILE_NAME: &str = "texdesk.sqlite3";
 const INITIAL_MIGRATION: &str = include_str!("../../migrations/001_initial_store.sql");
+const TEMPLATE_ID_PREFIX: &str = "template-";
 
 #[derive(Debug)]
 pub enum StoreError {
@@ -21,6 +23,7 @@ pub enum StoreError {
     },
     Migration(rusqlite::Error),
     Query(rusqlite::Error),
+    InvalidTemplate { message: String },
     TemplateNotFound { id: String },
 }
 
@@ -32,6 +35,7 @@ impl StoreError {
             Self::OpenDatabase { .. } => "store_open_database",
             Self::Migration(_) => "store_migration",
             Self::Query(_) => "store_query",
+            Self::InvalidTemplate { .. } => "store_invalid_template",
             Self::TemplateNotFound { .. } => "store_template_not_found",
         }
     }
@@ -57,6 +61,7 @@ impl fmt::Display for StoreError {
                 write!(formatter, "could not apply SQLite migrations: {source}")
             }
             Self::Query(source) => write!(formatter, "could not query SQLite store: {source}"),
+            Self::InvalidTemplate { message } => write!(formatter, "{message}"),
             Self::TemplateNotFound { id } => write!(formatter, "template was not found: {id}"),
         }
     }
@@ -69,6 +74,7 @@ impl std::error::Error for StoreError {
             Self::CreateDataDir { source, .. } => Some(source),
             Self::OpenDatabase { source, .. } => Some(source),
             Self::Migration(source) | Self::Query(source) => Some(source),
+            Self::InvalidTemplate { .. } => None,
             Self::TemplateNotFound { .. } => None,
         }
     }
@@ -115,6 +121,18 @@ pub struct Template {
     pub updated_at: String,
 }
 
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TemplateInput {
+    pub id: Option<String>,
+    pub name: String,
+    pub description: String,
+    pub category: String,
+    pub main_file_name: String,
+    pub body: String,
+    pub bibliography: Option<String>,
+}
+
 struct DefaultTemplate {
     id: &'static str,
     name: &'static str,
@@ -123,6 +141,48 @@ struct DefaultTemplate {
     main_file_name: &'static str,
     body: &'static str,
     bibliography: Option<&'static str>,
+}
+
+struct CleanTemplateInput {
+    id: String,
+    name: String,
+    description: String,
+    category: String,
+    main_file_name: String,
+    body: String,
+    bibliography: Option<String>,
+}
+
+impl TryFrom<TemplateInput> for CleanTemplateInput {
+    type Error = StoreError;
+
+    fn try_from(input: TemplateInput) -> Result<Self, Self::Error> {
+        let name = required_field(input.name, "template name")?;
+        let description = input.description.trim().to_owned();
+        let category = required_field(input.category, "template category")?;
+        let main_file_name = clean_tex_file_name(&input.main_file_name)?;
+        let body = required_field(input.body, "template body")?;
+        let bibliography = input
+            .bibliography
+            .and_then(|value| {
+                let trimmed = value.trim();
+                (!trimmed.is_empty()).then(|| trimmed.to_owned())
+            });
+        let id = match input.id {
+            Some(value) if !value.trim().is_empty() => clean_template_id(&value)?,
+            _ => generate_template_id(&name)?,
+        };
+
+        Ok(Self {
+            id,
+            name,
+            description,
+            category,
+            main_file_name,
+            body,
+            bibliography,
+        })
+    }
 }
 
 impl Store {
@@ -319,6 +379,60 @@ impl Store {
             .ok_or_else(|| StoreError::TemplateNotFound { id: id.to_owned() })
     }
 
+    pub fn save_template(&self, input: TemplateInput) -> Result<Template, StoreError> {
+        let cleaned = CleanTemplateInput::try_from(input)?;
+        let connection = self.connection()?;
+        connection
+            .execute(
+                "INSERT INTO templates (
+                    id,
+                    name,
+                    description,
+                    category,
+                    main_file_name,
+                    body,
+                    bibliography,
+                    is_default,
+                    created_at,
+                    updated_at
+                 )
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                 ON CONFLICT(id)
+                 DO UPDATE SET
+                    name = excluded.name,
+                    description = excluded.description,
+                    category = excluded.category,
+                    main_file_name = excluded.main_file_name,
+                    body = excluded.body,
+                    bibliography = excluded.bibliography,
+                    is_default = 0,
+                    updated_at = CURRENT_TIMESTAMP",
+                params![
+                    cleaned.id,
+                    cleaned.name,
+                    cleaned.description,
+                    cleaned.category,
+                    cleaned.main_file_name,
+                    cleaned.body,
+                    cleaned.bibliography,
+                ],
+            )
+            .map_err(StoreError::Query)?;
+        self.template(&cleaned.id)
+    }
+
+    pub fn delete_template(&self, id: &str) -> Result<String, StoreError> {
+        let connection = self.connection()?;
+        let deleted = connection
+            .execute("DELETE FROM templates WHERE id = ?1", params![id])
+            .map_err(StoreError::Query)?;
+        if deleted == 0 {
+            return Err(StoreError::TemplateNotFound { id: id.to_owned() });
+        }
+
+        Ok(id.to_owned())
+    }
+
     fn connection(&self) -> Result<Connection, StoreError> {
         open_database(&self.database_path)
     }
@@ -416,6 +530,18 @@ fn table_has_column(
 }
 
 fn seed_default_templates(connection: &Connection) -> Result<(), rusqlite::Error> {
+    let already_seeded = connection
+        .query_row(
+            "SELECT value FROM app_state WHERE key = 'templates_seeded'",
+            [],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()?
+        .is_some();
+    if already_seeded {
+        return Ok(());
+    }
+
     for template in DEFAULT_TEMPLATES {
         connection.execute(
             "INSERT INTO templates (
@@ -443,7 +569,98 @@ fn seed_default_templates(connection: &Connection) -> Result<(), rusqlite::Error
             ],
         )?;
     }
+    connection.execute(
+        "INSERT INTO app_state (key, value, updated_at)
+         VALUES ('templates_seeded', 'true', CURRENT_TIMESTAMP)
+         ON CONFLICT(key)
+         DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP",
+        [],
+    )?;
     Ok(())
+}
+
+fn required_field(value: String, label: &str) -> Result<String, StoreError> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        Err(StoreError::InvalidTemplate {
+            message: format!("{label} is required"),
+        })
+    } else {
+        Ok(trimmed.to_owned())
+    }
+}
+
+fn clean_template_id(value: &str) -> Result<String, StoreError> {
+    let trimmed = value.trim();
+    let is_valid = !trimmed.is_empty()
+        && trimmed
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || character == '-');
+    if is_valid {
+        Ok(trimmed.to_owned())
+    } else {
+        Err(StoreError::InvalidTemplate {
+            message: "template id may only contain letters, numbers, and hyphens".to_owned(),
+        })
+    }
+}
+
+fn clean_tex_file_name(value: &str) -> Result<String, StoreError> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Err(StoreError::InvalidTemplate {
+            message: "main file name is required".to_owned(),
+        });
+    }
+
+    let file_name = if trimmed.to_lowercase().ends_with(".tex") {
+        trimmed.to_owned()
+    } else {
+        format!("{trimmed}.tex")
+    };
+    if file_name.contains('/') || file_name.contains('\\') || file_name == "." || file_name == ".." {
+        return Err(StoreError::InvalidTemplate {
+            message: "main file name cannot contain path separators".to_owned(),
+        });
+    }
+
+    Ok(file_name)
+}
+
+fn generate_template_id(name: &str) -> Result<String, StoreError> {
+    let slug = slugify(name);
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| StoreError::InvalidTemplate {
+            message: "system clock is before the Unix epoch".to_owned(),
+        })?
+        .as_millis();
+    Ok(format!("{TEMPLATE_ID_PREFIX}{slug}-{timestamp}"))
+}
+
+fn slugify(value: &str) -> String {
+    let mut slug = String::new();
+    let mut previous_was_separator = false;
+
+    for character in value.chars() {
+        if character.is_ascii_alphanumeric() {
+            slug.push(character.to_ascii_lowercase());
+            previous_was_separator = false;
+        } else if !previous_was_separator && !slug.is_empty() {
+            slug.push('-');
+            previous_was_separator = true;
+        }
+    }
+
+    while slug.ends_with('-') {
+        slug.pop();
+    }
+
+    if slug.is_empty() {
+        "template".to_owned()
+    } else {
+        slug
+    }
 }
 
 const DEFAULT_TEMPLATES: &[DefaultTemplate] = &[
