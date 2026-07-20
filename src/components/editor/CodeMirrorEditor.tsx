@@ -1,0 +1,244 @@
+import { useEffect, useMemo, useRef } from "react";
+import {
+  Compartment,
+  EditorState,
+  type Extension,
+} from "@codemirror/state";
+import {
+  EditorView,
+  crosshairCursor,
+  drawSelection,
+  dropCursor,
+  highlightActiveLine,
+  highlightActiveLineGutter,
+  highlightSpecialChars,
+  keymap,
+  lineNumbers,
+  placeholder,
+  rectangularSelection,
+  type ViewUpdate,
+} from "@codemirror/view";
+import {
+  defaultKeymap,
+  history,
+  historyKeymap,
+  indentWithTab,
+} from "@codemirror/commands";
+import {
+  bracketMatching,
+  foldGutter,
+  indentOnInput,
+} from "@codemirror/language";
+import {
+  closeBrackets,
+  closeBracketsKeymap,
+  completionKeymap,
+} from "@codemirror/autocomplete";
+import {
+  highlightSelectionMatches,
+  searchKeymap,
+} from "@codemirror/search";
+
+import { latexEditorExtensions } from "../../editor/latexHighlighting";
+
+type CodeMirrorEditorProps = {
+  ariaLabel: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+  placeholderText: string;
+  value: string;
+};
+
+const editorTheme = EditorView.theme({
+  "&": {
+    height: "100%",
+    color: "#182235",
+    backgroundColor: "#ffffff",
+    fontSize: "0.95rem",
+  },
+  "&.cm-focused": {
+    outline: "none",
+  },
+  ".cm-scroller": {
+    fontFamily: '"SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace',
+    lineHeight: "1.7",
+  },
+  ".cm-content": {
+    minHeight: "100%",
+    padding: "18px 18px 18px 0",
+    caretColor: "#1d4ed8",
+  },
+  ".cm-line": {
+    padding: "0 4px 0 12px",
+  },
+  ".cm-gutters": {
+    backgroundColor: "#f1f4f8",
+    color: "#718098",
+    borderRight: "1px solid #d9e0ea",
+  },
+  ".cm-activeLineGutter": {
+    backgroundColor: "#e5edf8",
+    color: "#243047",
+  },
+  ".cm-activeLine": {
+    backgroundColor: "#f5f8fc",
+  },
+  ".cm-selectionBackground, &.cm-focused .cm-selectionBackground": {
+    backgroundColor: "#cfe0f7",
+  },
+  ".cm-placeholder": {
+    color: "#607089",
+  },
+  "&.cm-editor-disabled": {
+    color: "#607089",
+  },
+});
+
+function createBaseExtensions(
+  updateListener: (update: ViewUpdate) => void,
+  ariaLabel: string,
+): Extension[] {
+  return [
+    lineNumbers(),
+    highlightActiveLineGutter(),
+    highlightSpecialChars(),
+    history(),
+    foldGutter(),
+    drawSelection(),
+    dropCursor(),
+    EditorState.allowMultipleSelections.of(true),
+    indentOnInput(),
+    bracketMatching(),
+    closeBrackets(),
+    rectangularSelection(),
+    crosshairCursor(),
+    highlightActiveLine(),
+    highlightSelectionMatches(),
+    EditorView.lineWrapping,
+    EditorView.contentAttributes.of({ "aria-label": ariaLabel }),
+    EditorView.updateListener.of(updateListener),
+    keymap.of([
+      indentWithTab,
+      ...closeBracketsKeymap,
+      ...defaultKeymap,
+      ...searchKeymap,
+      ...historyKeymap,
+      ...completionKeymap,
+    ]),
+    ...latexEditorExtensions(),
+    editorTheme,
+  ];
+}
+
+export default function CodeMirrorEditor({
+  ariaLabel,
+  disabled,
+  onChange,
+  placeholderText,
+  value,
+}: CodeMirrorEditorProps) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const viewRef = useRef<EditorView | null>(null);
+  const onChangeRef = useRef(onChange);
+  const applyingExternalValue = useRef(false);
+  const editableCompartment = useMemo(() => new Compartment(), []);
+  const placeholderCompartment = useMemo(() => new Compartment(), []);
+
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
+  useEffect(() => {
+    const parent = containerRef.current;
+    if (!parent) {
+      return;
+    }
+
+    const updateListener = (update: ViewUpdate) => {
+      if (!update.docChanged || applyingExternalValue.current) {
+        return;
+      }
+
+      onChangeRef.current(update.state.doc.toString());
+    };
+
+    const view = new EditorView({
+      parent,
+      state: EditorState.create({
+        doc: value,
+        extensions: [
+          ...createBaseExtensions(updateListener, ariaLabel),
+          editableCompartment.of([
+            EditorView.editable.of(!disabled),
+            EditorState.readOnly.of(disabled),
+          ]),
+          placeholderCompartment.of(placeholder(placeholderText)),
+        ],
+      }),
+    });
+
+    viewRef.current = view;
+
+    return () => {
+      view.destroy();
+      viewRef.current = null;
+    };
+  }, [ariaLabel, editableCompartment, placeholderCompartment]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) {
+      return;
+    }
+
+    view.dispatch({
+      effects: editableCompartment.reconfigure([
+        EditorView.editable.of(!disabled),
+        EditorState.readOnly.of(disabled),
+      ]),
+    });
+  }, [disabled, editableCompartment]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) {
+      return;
+    }
+
+    const currentValue = view.state.doc.toString();
+    if (currentValue === value) {
+      return;
+    }
+
+    try {
+      applyingExternalValue.current = true;
+      view.dispatch({
+        changes: {
+          from: 0,
+          to: view.state.doc.length,
+          insert: value,
+        },
+      });
+    } finally {
+      applyingExternalValue.current = false;
+    }
+  }, [value]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) {
+      return;
+    }
+
+    view.dispatch({
+      effects: placeholderCompartment.reconfigure(placeholder(placeholderText)),
+    });
+  }, [placeholderCompartment, placeholderText]);
+
+  return (
+    <div
+      ref={containerRef}
+      className={`codemirror-editor${disabled ? " codemirror-editor-disabled" : ""}`}
+    />
+  );
+}
