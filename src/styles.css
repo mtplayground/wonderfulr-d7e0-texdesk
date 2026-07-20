@@ -128,8 +128,10 @@ button {
 .editor-actions {
   display: flex;
   flex: 0 0 auto;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+  justify-content: flex-end;
 }
 
 .file-status {
@@ -150,7 +152,8 @@ button {
 }
 
 .editor-save-button,
-.editor-compile-button {
+.editor-compile-button,
+.editor-snippet-button {
   height: 28px;
   padding: 0 10px;
   color: #243047;
@@ -164,16 +167,142 @@ button {
 .editor-save-button:hover:not(:disabled),
 .editor-save-button:focus-visible,
 .editor-compile-button:hover:not(:disabled),
-.editor-compile-button:focus-visible {
+.editor-compile-button:focus-visible,
+.editor-snippet-button:hover:not(:disabled),
+.editor-snippet-button:focus-visible {
   background: #eaf0f8;
   border-color: #9db2cd;
   outline: none;
 }
 
 .editor-save-button:disabled,
-.editor-compile-button:disabled {
+.editor-compile-button:disabled,
+.editor-snippet-button:disabled {
   cursor: not-allowed;
   opacity: 0.5;
+}
+
+.snippet-picker {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.snippet-picker-panel {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 8px);
+  right: 0;
+  display: grid;
+  width: min(340px, calc(100vw - 40px));
+  max-height: 420px;
+  grid-template-rows: auto auto minmax(120px, 1fr);
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid #cfd8e5;
+  border-radius: 6px;
+  box-shadow: 0 18px 38px rgba(22, 34, 51, 0.18);
+}
+
+.snippet-picker-search {
+  display: flex;
+  gap: 6px;
+  padding: 8px;
+  border-bottom: 1px solid #d9e0ea;
+  background: #f8fafc;
+}
+
+.snippet-picker-search input {
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  padding: 0 8px;
+  color: #172033;
+  background: #ffffff;
+  border: 1px solid #cfd8e5;
+  border-radius: 6px;
+  font-size: 0.78rem;
+}
+
+.snippet-picker-search button {
+  flex: 0 0 auto;
+  min-height: 30px;
+  padding: 0 9px;
+  color: #243047;
+  background: #ffffff;
+  border: 1px solid #cfd8e5;
+  border-radius: 6px;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.snippet-picker-search input:focus,
+.snippet-picker-search button:hover,
+.snippet-picker-search button:focus-visible {
+  border-color: #9db2cd;
+  outline: 2px solid #dbeafe;
+}
+
+.snippet-picker-error {
+  margin: 8px;
+  padding: 8px 10px;
+  overflow-wrap: anywhere;
+  color: #8a1f1f;
+  background: #fff1f1;
+  border: 1px solid #f2c5c5;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.snippet-picker-list {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px;
+  overflow: auto;
+}
+
+.snippet-picker-item {
+  display: grid;
+  min-height: 38px;
+  gap: 2px;
+  padding: 7px 8px;
+  color: #2c3647;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+}
+
+.snippet-picker-item:hover,
+.snippet-picker-item:focus-visible {
+  background: #eaf0f8;
+  border-color: #d2ddeb;
+  outline: none;
+}
+
+.snippet-picker-item span,
+.snippet-picker-item small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.snippet-picker-item span {
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.snippet-picker-item small,
+.snippet-picker-empty {
+  color: #607089;
+  font-size: 0.72rem;
+}
+
+.snippet-picker-empty {
+  padding: 8px;
 }
 
 .compile-status {

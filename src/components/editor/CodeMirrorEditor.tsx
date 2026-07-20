@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useRef } from "react";
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+} from "react";
 import {
   Compartment,
   EditorState,
@@ -33,6 +39,10 @@ type CodeMirrorEditorProps = {
   onSave: () => void;
   placeholderText: string;
   value: string;
+};
+
+export type CodeMirrorEditorHandle = {
+  insertSnippet: (body: string) => boolean;
 };
 
 const editorTheme = EditorView.theme({
@@ -106,121 +116,157 @@ function createBaseExtensions(
   ];
 }
 
-export default function CodeMirrorEditor({
-  ariaLabel,
-  disabled,
-  onChange,
-  onSave,
-  placeholderText,
-  value,
-}: CodeMirrorEditorProps) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const viewRef = useRef<EditorView | null>(null);
-  const onChangeRef = useRef(onChange);
-  const onSaveRef = useRef(onSave);
-  const applyingExternalValue = useRef(false);
-  const editableCompartment = useMemo(() => new Compartment(), []);
-  const placeholderCompartment = useMemo(() => new Compartment(), []);
+const CodeMirrorEditor = forwardRef<CodeMirrorEditorHandle, CodeMirrorEditorProps>(
+  function CodeMirrorEditor(
+    {
+      ariaLabel,
+      disabled,
+      onChange,
+      onSave,
+      placeholderText,
+      value,
+    },
+    ref,
+  ) {
+    const containerRef = useRef<HTMLDivElement | null>(null);
+    const viewRef = useRef<EditorView | null>(null);
+    const onChangeRef = useRef(onChange);
+    const onSaveRef = useRef(onSave);
+    const applyingExternalValue = useRef(false);
+    const editableCompartment = useMemo(() => new Compartment(), []);
+    const placeholderCompartment = useMemo(() => new Compartment(), []);
 
-  useEffect(() => {
-    onChangeRef.current = onChange;
-  }, [onChange]);
+    useEffect(() => {
+      onChangeRef.current = onChange;
+    }, [onChange]);
 
-  useEffect(() => {
-    onSaveRef.current = onSave;
-  }, [onSave]);
+    useEffect(() => {
+      onSaveRef.current = onSave;
+    }, [onSave]);
 
-  useEffect(() => {
-    const parent = containerRef.current;
-    if (!parent) {
-      return;
-    }
+    useImperativeHandle(
+      ref,
+      () => ({
+        insertSnippet(body: string) {
+          const view = viewRef.current;
+          if (!view || disabled) {
+            return false;
+          }
 
-    const updateListener = (update: ViewUpdate) => {
-      if (!update.docChanged || applyingExternalValue.current) {
+          const selection = view.state.selection.main;
+          const insert = body.endsWith("\n") ? body : `${body}\n`;
+          view.dispatch({
+            changes: {
+              from: selection.from,
+              to: selection.to,
+              insert,
+            },
+            selection: {
+              anchor: selection.from + insert.length,
+            },
+            scrollIntoView: true,
+          });
+          view.focus();
+          return true;
+        },
+      }),
+      [disabled],
+    );
+
+    useEffect(() => {
+      const parent = containerRef.current;
+      if (!parent) {
         return;
       }
 
-      onChangeRef.current(update.state.doc.toString());
-    };
+      const updateListener = (update: ViewUpdate) => {
+        if (!update.docChanged || applyingExternalValue.current) {
+          return;
+        }
 
-    const view = new EditorView({
-      parent,
-      state: EditorState.create({
-        doc: value,
-        extensions: [
-          ...createBaseExtensions(updateListener, ariaLabel, () => onSaveRef.current()),
-          editableCompartment.of([
-            EditorView.editable.of(!disabled),
-            EditorState.readOnly.of(disabled),
-          ]),
-          placeholderCompartment.of(placeholder(placeholderText)),
-        ],
-      }),
-    });
+        onChangeRef.current(update.state.doc.toString());
+      };
 
-    viewRef.current = view;
-
-    return () => {
-      view.destroy();
-      viewRef.current = null;
-    };
-  }, [ariaLabel, editableCompartment, placeholderCompartment]);
-
-  useEffect(() => {
-    const view = viewRef.current;
-    if (!view) {
-      return;
-    }
-
-    view.dispatch({
-      effects: editableCompartment.reconfigure([
-        EditorView.editable.of(!disabled),
-        EditorState.readOnly.of(disabled),
-      ]),
-    });
-  }, [disabled, editableCompartment]);
-
-  useEffect(() => {
-    const view = viewRef.current;
-    if (!view) {
-      return;
-    }
-
-    const currentValue = view.state.doc.toString();
-    if (currentValue === value) {
-      return;
-    }
-
-    try {
-      applyingExternalValue.current = true;
-      view.dispatch({
-        changes: {
-          from: 0,
-          to: view.state.doc.length,
-          insert: value,
-        },
+      const view = new EditorView({
+        parent,
+        state: EditorState.create({
+          doc: value,
+          extensions: [
+            ...createBaseExtensions(updateListener, ariaLabel, () => onSaveRef.current()),
+            editableCompartment.of([
+              EditorView.editable.of(!disabled),
+              EditorState.readOnly.of(disabled),
+            ]),
+            placeholderCompartment.of(placeholder(placeholderText)),
+          ],
+        }),
       });
-    } finally {
-      applyingExternalValue.current = false;
-    }
-  }, [value]);
 
-  useEffect(() => {
-    const view = viewRef.current;
-    if (!view) {
-      return;
-    }
+      viewRef.current = view;
 
-    view.dispatch({
-      effects: placeholderCompartment.reconfigure(placeholder(placeholderText)),
-    });
-  }, [placeholderCompartment, placeholderText]);
+      return () => {
+        view.destroy();
+        viewRef.current = null;
+      };
+    }, [ariaLabel, editableCompartment, placeholderCompartment]);
 
-  return (
-    <div
-      ref={containerRef}
-      className={`codemirror-editor${disabled ? " codemirror-editor-disabled" : ""}`}
-    />
-  );
-}
+    useEffect(() => {
+      const view = viewRef.current;
+      if (!view) {
+        return;
+      }
+
+      view.dispatch({
+        effects: editableCompartment.reconfigure([
+          EditorView.editable.of(!disabled),
+          EditorState.readOnly.of(disabled),
+        ]),
+      });
+    }, [disabled, editableCompartment]);
+
+    useEffect(() => {
+      const view = viewRef.current;
+      if (!view) {
+        return;
+      }
+
+      const currentValue = view.state.doc.toString();
+      if (currentValue === value) {
+        return;
+      }
+
+      try {
+        applyingExternalValue.current = true;
+        view.dispatch({
+          changes: {
+            from: 0,
+            to: view.state.doc.length,
+            insert: value,
+          },
+        });
+      } finally {
+        applyingExternalValue.current = false;
+      }
+    }, [value]);
+
+    useEffect(() => {
+      const view = viewRef.current;
+      if (!view) {
+        return;
+      }
+
+      view.dispatch({
+        effects: placeholderCompartment.reconfigure(placeholder(placeholderText)),
+      });
+    }, [placeholderCompartment, placeholderText]);
+
+    return (
+      <div
+        ref={containerRef}
+        className={`codemirror-editor${disabled ? " codemirror-editor-disabled" : ""}`}
+      />
+    );
+  },
+);
+
+export default CodeMirrorEditor;
