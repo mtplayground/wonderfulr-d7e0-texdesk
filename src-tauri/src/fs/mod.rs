@@ -233,6 +233,18 @@ pub fn create_file(request: CreateFileRequest) -> Result<FsEntry, FsError> {
     entry_for_path(&root, &path)
 }
 
+pub fn ensure_path_available(workspace_root: &str, path: &str) -> Result<(), FsError> {
+    let root = canonical_workspace_root(workspace_root)?;
+    let candidate = resolve_writable_path(&root, path)?;
+    if candidate.exists() {
+        return Err(FsError::DestinationExists {
+            path: path.to_owned(),
+        });
+    }
+
+    Ok(())
+}
+
 pub fn create_directory(request: WorkspacePathRequest) -> Result<FsEntry, FsError> {
     let root = canonical_workspace_root(&request.workspace_root)?;
     let path = resolve_writable_path(&root, &request.path)?;

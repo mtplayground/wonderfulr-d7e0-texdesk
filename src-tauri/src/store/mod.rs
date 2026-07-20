@@ -21,6 +21,7 @@ pub enum StoreError {
     },
     Migration(rusqlite::Error),
     Query(rusqlite::Error),
+    TemplateNotFound { id: String },
 }
 
 impl StoreError {
@@ -31,6 +32,7 @@ impl StoreError {
             Self::OpenDatabase { .. } => "store_open_database",
             Self::Migration(_) => "store_migration",
             Self::Query(_) => "store_query",
+            Self::TemplateNotFound { .. } => "store_template_not_found",
         }
     }
 }
@@ -55,6 +57,7 @@ impl fmt::Display for StoreError {
                 write!(formatter, "could not apply SQLite migrations: {source}")
             }
             Self::Query(source) => write!(formatter, "could not query SQLite store: {source}"),
+            Self::TemplateNotFound { id } => write!(formatter, "template was not found: {id}"),
         }
     }
 }
@@ -66,6 +69,7 @@ impl std::error::Error for StoreError {
             Self::CreateDataDir { source, .. } => Some(source),
             Self::OpenDatabase { source, .. } => Some(source),
             Self::Migration(source) | Self::Query(source) => Some(source),
+            Self::TemplateNotFound { .. } => None,
         }
     }
 }
@@ -276,6 +280,43 @@ impl Store {
             templates.push(row.map_err(StoreError::Query)?);
         }
         Ok(templates)
+    }
+
+    pub fn template(&self, id: &str) -> Result<Template, StoreError> {
+        let connection = self.connection()?;
+        connection
+            .query_row(
+                "SELECT id,
+                        name,
+                        description,
+                        category,
+                        main_file_name,
+                        body,
+                        bibliography,
+                        is_default,
+                        created_at,
+                        updated_at
+                 FROM templates
+                 WHERE id = ?1",
+                params![id],
+                |row| {
+                    Ok(Template {
+                        id: row.get(0)?,
+                        name: row.get(1)?,
+                        description: row.get(2)?,
+                        category: row.get(3)?,
+                        main_file_name: row.get(4)?,
+                        body: row.get(5)?,
+                        bibliography: row.get(6)?,
+                        is_default: row.get::<_, i64>(7)? != 0,
+                        created_at: row.get(8)?,
+                        updated_at: row.get(9)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(StoreError::Query)?
+            .ok_or_else(|| StoreError::TemplateNotFound { id: id.to_owned() })
     }
 
     fn connection(&self) -> Result<Connection, StoreError> {

@@ -14,6 +14,7 @@ fn main() -> tauri::Result<()> {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::apply_template_to_workspace,
             commands::compile_document,
             commands::create_workspace_directory,
             commands::create_workspace_file,

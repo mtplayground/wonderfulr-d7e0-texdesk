@@ -40,6 +40,22 @@ pub struct RecentProjectsRequest {
     pub limit: Option<i64>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApplyTemplateRequest {
+    pub workspace_root: String,
+    pub target_directory: String,
+    pub template_id: String,
+    pub assignment_name: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppliedTemplate {
+    pub main_file: FsEntry,
+    pub bibliography_file: Option<FsEntry>,
+}
+
 impl From<StoreError> for CommandError {
     fn from(error: StoreError) -> Self {
         Self {
@@ -132,6 +148,53 @@ pub fn list_templates(store: State<'_, Store>) -> CommandResult<Vec<Template>> {
 }
 
 #[tauri::command]
+pub fn apply_template_to_workspace(
+    request: ApplyTemplateRequest,
+    store: State<'_, Store>,
+) -> CommandResult<AppliedTemplate> {
+    let template = store
+        .template(&request.template_id)
+        .map_err(CommandError::from)?;
+    let main_file_name = normalize_tex_file_name(&request.assignment_name)?;
+    let main_file_path = join_workspace_path(&request.target_directory, &main_file_name);
+    let bibliography_path = template
+        .bibliography
+        .as_ref()
+        .map(|_| join_workspace_path(&request.target_directory, "references.bib"));
+
+    crate::fs::ensure_path_available(&request.workspace_root, &main_file_path)
+        .map_err(CommandError::from)?;
+    if let Some(path) = &bibliography_path {
+        crate::fs::ensure_path_available(&request.workspace_root, path)
+            .map_err(CommandError::from)?;
+    }
+
+    let main_file = crate::fs::create_file(CreateFileRequest {
+        workspace_root: request.workspace_root.clone(),
+        path: main_file_path,
+        contents: Some(template.body),
+    })
+    .map_err(CommandError::from)?;
+
+    let bibliography_file = match (bibliography_path, template.bibliography) {
+        (Some(path), Some(contents)) => Some(
+            crate::fs::create_file(CreateFileRequest {
+                workspace_root: request.workspace_root,
+                path,
+                contents: Some(contents),
+            })
+            .map_err(CommandError::from)?,
+        ),
+        _ => None,
+    };
+
+    Ok(AppliedTemplate {
+        main_file,
+        bibliography_file,
+    })
+}
+
+#[tauri::command]
 pub fn list_workspace_entries(request: ListWorkspaceRequest) -> CommandResult<Vec<FsEntry>> {
     crate::fs::list_entries(request).map_err(CommandError::from)
 }
@@ -194,4 +257,38 @@ pub fn get_workspace_watcher_status(
     watcher: State<'_, WorkspaceWatcherState>,
 ) -> CommandResult<WorkspaceWatchStatus> {
     watcher.status().map_err(CommandError::from)
+}
+
+fn normalize_tex_file_name(raw_name: &str) -> CommandResult<String> {
+    let trimmed = raw_name.trim();
+    if trimmed.is_empty() {
+        return Err(CommandError {
+            code: "template_invalid_assignment_name".to_owned(),
+            message: "assignment file name is required".to_owned(),
+        });
+    }
+
+    let file_name = if trimmed.to_lowercase().ends_with(".tex") {
+        trimmed.to_owned()
+    } else {
+        format!("{trimmed}.tex")
+    };
+
+    if file_name.contains('/') || file_name.contains('\\') || file_name == "." || file_name == ".." {
+        return Err(CommandError {
+            code: "template_invalid_assignment_name".to_owned(),
+            message: "assignment file name cannot contain path separators".to_owned(),
+        });
+    }
+
+    Ok(file_name)
+}
+
+fn join_workspace_path(directory: &str, file_name: &str) -> String {
+    let clean_directory = directory.trim_matches('/');
+    if clean_directory.is_empty() {
+        file_name.to_owned()
+    } else {
+        format!("{clean_directory}/{file_name}")
+    }
 }
