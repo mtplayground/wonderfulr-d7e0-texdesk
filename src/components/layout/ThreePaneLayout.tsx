@@ -7,6 +7,7 @@ import {
   rememberOpenFile,
   rememberWorkspaceRoot,
 } from "../../ipc/client";
+import { useCompileState } from "../../state/compileState";
 import { useDocumentState } from "../../state/documentState";
 import { usePaneLayout } from "../../state/layoutState";
 import { useWorkspaceSync } from "../../state/workspaceSync";
@@ -46,6 +47,12 @@ export default function ThreePaneLayout() {
   const didRestoreFile = useRef(false);
   const workspaceRoot = restoreState.workspaceRoot;
   const documentState = useDocumentState(workspaceRoot);
+  const compileState = useCompileState({
+    documentPath: documentState.document?.path ?? null,
+    isDirty: documentState.isDirty,
+    saveDocument: documentState.saveDocument,
+    workspaceRoot,
+  });
   const { handleWorkspaceChange } = documentState;
   const workspaceSync = useWorkspaceSync(workspaceRoot);
   const workspaceLabel =
@@ -176,6 +183,17 @@ export default function ThreePaneLayout() {
             </p>
           </div>
           <div className="editor-actions">
+            <span className={`compile-status compile-status-${compileState.runState.status}`}>
+              {compileState.statusLabel}
+            </span>
+            <button
+              type="button"
+              className="editor-compile-button"
+              disabled={!compileState.canCompile}
+              onClick={() => void compileState.compile()}
+            >
+              {compileState.runState.status === "running" ? "Compiling" : "Compile"}
+            </button>
             <span className={`file-status${documentState.isDirty ? " is-dirty" : ""}`}>
               {documentState.isDirty ? "Unsaved" : "Saved"}
             </span>
@@ -200,6 +218,16 @@ export default function ThreePaneLayout() {
         {documentState.externalChangePath ? (
           <div className="editor-sync-warning">
             Open file changed on disk.
+          </div>
+        ) : null}
+        {compileState.runState.status === "success" && compileState.runState.result ? (
+          <div className="compile-run-message compile-run-message-success">
+            Compiled {compileState.runState.result.pdfPath}
+          </div>
+        ) : null}
+        {compileState.runState.status === "failure" && compileState.runState.error ? (
+          <div className="compile-run-message compile-run-message-failure">
+            {compileState.runState.error}
           </div>
         ) : null}
       </section>
