@@ -31,6 +31,7 @@ import { foldGutter } from "@codemirror/language";
 
 import { texEditorErgonomics } from "../../editor/editorErgonomics";
 import { latexEditorExtensions } from "../../editor/latexHighlighting";
+import { applySnippetToText } from "../../editor/snippetInsertion";
 
 type CodeMirrorEditorProps = {
   ariaLabel: string;
@@ -154,15 +155,20 @@ const CodeMirrorEditor = forwardRef<CodeMirrorEditorHandle, CodeMirrorEditorProp
           }
 
           const selection = view.state.selection.main;
-          const insert = body.endsWith("\n") ? body : `${body}\n`;
+          const insertion = applySnippetToText(
+            view.state.doc.toString(),
+            selection.from,
+            selection.to,
+            body,
+          );
           view.dispatch({
             changes: {
               from: selection.from,
               to: selection.to,
-              insert,
+              insert: insertion.inserted,
             },
             selection: {
-              anchor: selection.from + insert.length,
+              anchor: insertion.cursor,
             },
             scrollIntoView: true,
           });
