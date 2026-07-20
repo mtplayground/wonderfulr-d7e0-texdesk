@@ -1,7 +1,12 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useAppConfig } from "../../config/useAppConfig";
 import { useStoreStatus } from "../../config/useStoreStatus";
+import {
+  getWorkspaceState,
+  rememberOpenFile,
+  rememberWorkspaceRoot,
+} from "../../ipc/client";
 import { useDocumentState } from "../../state/documentState";
 import { usePaneLayout } from "../../state/layoutState";
 import { useWorkspaceSync } from "../../state/workspaceSync";
@@ -28,8 +33,17 @@ export default function ThreePaneLayout() {
   const { containerRef, layout, beginResize, resizeHandlers } = usePaneLayout();
   const appConfig = useAppConfig();
   const storeStatus = useStoreStatus();
-  const workspaceRoot =
-    appConfig.status === "ready" ? appConfig.config.defaultWorkspaceRoot : null;
+  const [restoreState, setRestoreState] = useState<{
+    isReady: boolean;
+    lastOpenFile: string | null;
+    workspaceRoot: string | null;
+  }>({
+    isReady: false,
+    lastOpenFile: null,
+    workspaceRoot: null,
+  });
+  const didRestoreFile = useRef(false);
+  const workspaceRoot = restoreState.workspaceRoot;
   const documentState = useDocumentState(workspaceRoot);
   const { handleWorkspaceChange } = documentState;
   const workspaceSync = useWorkspaceSync(workspaceRoot);
@@ -45,6 +59,71 @@ export default function ThreePaneLayout() {
     storeStatus.status === "ready" && storeStatus.store
       ? `Store v${storeStatus.store.schemaVersion}`
       : "Local store";
+
+  useEffect(() => {
+    if (appConfig.status !== "ready") {
+      return;
+    }
+
+    let isMounted = true;
+    const configWorkspaceRoot = appConfig.config.defaultWorkspaceRoot;
+    getWorkspaceState()
+      .then((state) => {
+        if (!isMounted) {
+          return;
+        }
+
+        setRestoreState({
+          isReady: true,
+          lastOpenFile: state?.lastOpenFile ?? null,
+          workspaceRoot: state?.lastWorkspaceRoot ?? configWorkspaceRoot,
+        });
+      })
+      .catch(() => {
+        if (isMounted) {
+          setRestoreState({
+            isReady: true,
+            lastOpenFile: null,
+            workspaceRoot: configWorkspaceRoot,
+          });
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [appConfig]);
+
+  useEffect(() => {
+    if (!restoreState.isReady || !workspaceRoot) {
+      return;
+    }
+
+    rememberWorkspaceRoot(workspaceRoot).catch(() => undefined);
+  }, [restoreState.isReady, workspaceRoot]);
+
+  useEffect(() => {
+    if (
+      !restoreState.isReady ||
+      !workspaceRoot ||
+      !restoreState.lastOpenFile ||
+      didRestoreFile.current
+    ) {
+      return;
+    }
+
+    didRestoreFile.current = true;
+    void documentState.openDocument(restoreState.lastOpenFile);
+  }, [documentState.openDocument, restoreState, workspaceRoot]);
+
+  useEffect(() => {
+    const path = documentState.document?.path;
+    if (!workspaceRoot || !path) {
+      return;
+    }
+
+    rememberOpenFile(workspaceRoot, path).catch(() => undefined);
+  }, [documentState.document?.path, workspaceRoot]);
 
   useEffect(() => {
     if (workspaceSync.lastEvent) {

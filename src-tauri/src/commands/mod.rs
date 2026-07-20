@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use crate::config::AppConfig;
@@ -6,7 +6,7 @@ use crate::fs::{
     CreateFileRequest, DeleteResult, FileContent, FsEntry, FsError, ListWorkspaceRequest,
     RenameEntryRequest, WorkspacePathRequest, WriteFileRequest,
 };
-use crate::store::{Store, StoreError, StoreStatus};
+use crate::store::{RecentProject, Store, StoreError, StoreStatus, WorkspaceState};
 use crate::watcher::{
     WatchWorkspaceRequest, WatcherError, WorkspaceWatchStatus, WorkspaceWatcherState,
 };
@@ -19,6 +19,25 @@ pub struct CommandError {
 }
 
 pub type CommandResult<T> = Result<T, CommandError>;
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RememberWorkspaceRequest {
+    pub workspace_root: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RememberOpenFileRequest {
+    pub workspace_root: String,
+    pub path: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecentProjectsRequest {
+    pub limit: Option<i64>,
+}
 
 impl From<StoreError> for CommandError {
     fn from(error: StoreError) -> Self {
@@ -60,6 +79,41 @@ pub fn ping() -> CommandResult<String> {
 #[tauri::command]
 pub fn get_store_status(store: State<'_, Store>) -> CommandResult<StoreStatus> {
     store.status().map_err(CommandError::from)
+}
+
+#[tauri::command]
+pub fn get_workspace_state(store: State<'_, Store>) -> CommandResult<WorkspaceState> {
+    store.workspace_state().map_err(CommandError::from)
+}
+
+#[tauri::command]
+pub fn remember_workspace_root(
+    request: RememberWorkspaceRequest,
+    store: State<'_, Store>,
+) -> CommandResult<WorkspaceState> {
+    store
+        .remember_workspace_root(&request.workspace_root)
+        .map_err(CommandError::from)
+}
+
+#[tauri::command]
+pub fn remember_open_file(
+    request: RememberOpenFileRequest,
+    store: State<'_, Store>,
+) -> CommandResult<WorkspaceState> {
+    store
+        .remember_open_file(&request.workspace_root, &request.path)
+        .map_err(CommandError::from)
+}
+
+#[tauri::command]
+pub fn list_recent_projects(
+    request: RecentProjectsRequest,
+    store: State<'_, Store>,
+) -> CommandResult<Vec<RecentProject>> {
+    store
+        .recent_projects(request.limit.unwrap_or(10))
+        .map_err(CommandError::from)
 }
 
 #[tauri::command]
