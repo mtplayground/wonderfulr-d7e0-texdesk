@@ -12,9 +12,12 @@ import { useDocumentState } from "../../state/documentState";
 import { usePaneLayout } from "../../state/layoutState";
 import { useWorkspaceSync } from "../../state/workspaceSync";
 import CompileLogPanel from "../compile/CompileLogPanel";
-import CodeMirrorEditor from "../editor/CodeMirrorEditor";
+import CodeMirrorEditor, {
+  type CodeMirrorEditorHandle,
+} from "../editor/CodeMirrorEditor";
 import FileTree from "../file-tree/FileTree";
 import PdfPreview from "../preview/PdfPreview";
+import SnippetPicker from "../snippets/SnippetPicker";
 import TemplateManager from "../templates/TemplateManager";
 
 function PaneResizer({
@@ -36,6 +39,7 @@ function PaneResizer({
 
 export default function ThreePaneLayout() {
   const { containerRef, layout, beginResize, resizeHandlers } = usePaneLayout();
+  const editorRef = useRef<CodeMirrorEditorHandle | null>(null);
   const appConfig = useAppConfig();
   const storeStatus = useStoreStatus();
   const [restoreState, setRestoreState] = useState<{
@@ -200,6 +204,12 @@ export default function ThreePaneLayout() {
             >
               {compileState.runState.status === "running" ? "Compiling" : "Compile"}
             </button>
+            <SnippetPicker
+              disabled={!documentState.document || documentState.status === "loading"}
+              onInsert={(snippet) => {
+                editorRef.current?.insertSnippet(snippet.body);
+              }}
+            />
             <span className={`file-status${documentState.isDirty ? " is-dirty" : ""}`}>
               {documentState.isDirty ? "Unsaved" : "Saved"}
             </span>
@@ -214,6 +224,7 @@ export default function ThreePaneLayout() {
           </div>
         </header>
         <CodeMirrorEditor
+          ref={editorRef}
           ariaLabel="Document editor"
           disabled={!documentState.document || documentState.status === "loading"}
           value={documentState.document?.contents ?? ""}
