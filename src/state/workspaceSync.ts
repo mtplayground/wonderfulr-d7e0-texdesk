@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import { displayUserError } from "../errors/appError";
 import {
   onWorkspaceChanged,
   startWorkspaceWatcher,
@@ -12,10 +13,6 @@ type WorkspaceSyncState = {
   lastEvent: WorkspaceChangeEvent | null;
   refreshKey: number;
 };
-
-function displayError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 export function useWorkspaceSync(workspaceRoot: string | null): WorkspaceSyncState {
   const [state, setState] = useState<WorkspaceSyncState>({
@@ -51,7 +48,7 @@ export function useWorkspaceSync(workspaceRoot: string | null): WorkspaceSyncSta
         if (isMounted) {
           setState((current) => ({
             ...current,
-            error: displayError(subscribeError),
+            error: displayUserError(subscribeError, "filesystem"),
           }));
         }
       });
@@ -60,7 +57,7 @@ export function useWorkspaceSync(workspaceRoot: string | null): WorkspaceSyncSta
       if (isMounted) {
         setState((current) => ({
           ...current,
-          error: displayError(watchError),
+          error: displayUserError(watchError, "filesystem"),
         }));
       }
     });

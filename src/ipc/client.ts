@@ -60,6 +60,10 @@ export type IpcError = {
   message: string;
 };
 
+export type IpcCommandError = Error & {
+  code: string;
+};
+
 function isIpcError(value: unknown): value is IpcError {
   if (!value || typeof value !== "object") {
     return false;
@@ -77,7 +81,10 @@ async function invokeCommand<TResponse>(
     return await invoke<TResponse>(command, args);
   } catch (error) {
     if (isIpcError(error)) {
-      throw new Error(`${error.code}: ${error.message}`);
+      const commandError = new Error(error.message) as IpcCommandError;
+      commandError.name = "IpcCommandError";
+      commandError.code = error.code;
+      throw commandError;
     }
 
     throw error instanceof Error ? error : new Error(String(error));

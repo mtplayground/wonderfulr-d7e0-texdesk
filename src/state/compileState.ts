@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { displayUserError } from "../errors/appError";
 import { compileDocument } from "../ipc/client";
 import type { CompileResult } from "../types/compile";
 
@@ -20,10 +21,6 @@ const INITIAL_RUN_STATE: CompileRunState = {
   startedAt: null,
   status: "idle",
 };
-
-function displayError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 export function useCompileState({
   documentPath,
@@ -77,7 +74,7 @@ export function useCompileState({
       });
     } catch (compileError) {
       setRunState({
-        error: displayError(compileError),
+        error: displayUserError(compileError, "compile"),
         finishedAt: Date.now(),
         result: null,
         startedAt,
