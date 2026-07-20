@@ -94,6 +94,10 @@ export function useDocumentState(workspaceRoot: string | null) {
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
+      if (event.defaultPrevented) {
+        return;
+      }
+
       if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "s") {
         return;
       }

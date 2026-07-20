@@ -19,32 +19,18 @@ import {
   type ViewUpdate,
 } from "@codemirror/view";
 import {
-  defaultKeymap,
-  history,
-  historyKeymap,
-  indentWithTab,
-} from "@codemirror/commands";
-import {
-  bracketMatching,
-  foldGutter,
-  indentOnInput,
-} from "@codemirror/language";
-import {
-  closeBrackets,
-  closeBracketsKeymap,
-  completionKeymap,
-} from "@codemirror/autocomplete";
-import {
   highlightSelectionMatches,
-  searchKeymap,
 } from "@codemirror/search";
+import { foldGutter } from "@codemirror/language";
 
+import { texEditorErgonomics } from "../../editor/editorErgonomics";
 import { latexEditorExtensions } from "../../editor/latexHighlighting";
 
 type CodeMirrorEditorProps = {
   ariaLabel: string;
   disabled: boolean;
   onChange: (value: string) => void;
+  onSave: () => void;
   placeholderText: string;
   value: string;
 };
@@ -97,19 +83,16 @@ const editorTheme = EditorView.theme({
 function createBaseExtensions(
   updateListener: (update: ViewUpdate) => void,
   ariaLabel: string,
+  onSave: () => void,
 ): Extension[] {
   return [
     lineNumbers(),
     highlightActiveLineGutter(),
     highlightSpecialChars(),
-    history(),
     foldGutter(),
     drawSelection(),
     dropCursor(),
     EditorState.allowMultipleSelections.of(true),
-    indentOnInput(),
-    bracketMatching(),
-    closeBrackets(),
     rectangularSelection(),
     crosshairCursor(),
     highlightActiveLine(),
@@ -117,14 +100,7 @@ function createBaseExtensions(
     EditorView.lineWrapping,
     EditorView.contentAttributes.of({ "aria-label": ariaLabel }),
     EditorView.updateListener.of(updateListener),
-    keymap.of([
-      indentWithTab,
-      ...closeBracketsKeymap,
-      ...defaultKeymap,
-      ...searchKeymap,
-      ...historyKeymap,
-      ...completionKeymap,
-    ]),
+    ...texEditorErgonomics({ onSave }),
     ...latexEditorExtensions(),
     editorTheme,
   ];
@@ -134,12 +110,14 @@ export default function CodeMirrorEditor({
   ariaLabel,
   disabled,
   onChange,
+  onSave,
   placeholderText,
   value,
 }: CodeMirrorEditorProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
+  const onSaveRef = useRef(onSave);
   const applyingExternalValue = useRef(false);
   const editableCompartment = useMemo(() => new Compartment(), []);
   const placeholderCompartment = useMemo(() => new Compartment(), []);
@@ -147,6 +125,10 @@ export default function CodeMirrorEditor({
   useEffect(() => {
     onChangeRef.current = onChange;
   }, [onChange]);
+
+  useEffect(() => {
+    onSaveRef.current = onSave;
+  }, [onSave]);
 
   useEffect(() => {
     const parent = containerRef.current;
@@ -167,7 +149,7 @@ export default function CodeMirrorEditor({
       state: EditorState.create({
         doc: value,
         extensions: [
-          ...createBaseExtensions(updateListener, ariaLabel),
+          ...createBaseExtensions(updateListener, ariaLabel, () => onSaveRef.current()),
           editableCompartment.of([
             EditorView.editable.of(!disabled),
             EditorState.readOnly.of(disabled),
