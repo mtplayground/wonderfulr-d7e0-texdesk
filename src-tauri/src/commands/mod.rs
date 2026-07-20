@@ -339,3 +339,35 @@ fn join_workspace_path(directory: &str, file_name: &str) -> String {
         format!("{clean_directory}/{file_name}")
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{join_workspace_path, normalize_tex_file_name};
+
+    #[test]
+    fn normalize_tex_file_name_adds_extension_and_trims() {
+        assert_eq!(
+            normalize_tex_file_name("  assignment-one  ").unwrap(),
+            "assignment-one.tex"
+        );
+        assert_eq!(normalize_tex_file_name("paper.TeX").unwrap(), "paper.TeX");
+    }
+
+    #[test]
+    fn normalize_tex_file_name_rejects_empty_or_nested_names() {
+        let empty = normalize_tex_file_name(" ").unwrap_err();
+        assert_eq!(empty.code, "template_invalid_assignment_name");
+
+        let nested = normalize_tex_file_name("../escape").unwrap_err();
+        assert_eq!(nested.code, "template_invalid_assignment_name");
+    }
+
+    #[test]
+    fn join_workspace_path_keeps_template_output_inside_target_directory() {
+        assert_eq!(join_workspace_path("", "main.tex"), "main.tex");
+        assert_eq!(
+            join_workspace_path("/course/week-1/", "main.tex"),
+            "course/week-1/main.tex"
+        );
+    }
+}

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { listSnippets } from "../../ipc/client";
 import type { Snippet } from "../../types/snippets";
+import { filterSnippets } from "./snippetFiltering";
 
 type SnippetPickerProps = {
   disabled: boolean;
@@ -26,19 +27,7 @@ export default function SnippetPicker({
   const queryRef = useRef<HTMLInputElement | null>(null);
 
   const filteredSnippets = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    if (!normalizedQuery) {
-      return snippets;
-    }
-
-    return snippets.filter((snippet) =>
-      [
-        snippet.name,
-        snippet.description,
-        snippet.category,
-        snippet.trigger,
-      ].some((value) => value.toLowerCase().includes(normalizedQuery)),
-    );
+    return filterSnippets(snippets, query);
   }, [query, snippets]);
 
   async function loadSnippets() {

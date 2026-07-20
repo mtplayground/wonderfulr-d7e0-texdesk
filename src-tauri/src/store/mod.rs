@@ -1018,3 +1018,56 @@ const DEFAULT_SNIPPETS: &[DefaultSnippet] = &[
 "#,
     },
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::{CleanTemplateInput, TemplateInput, DEFAULT_SNIPPETS, DEFAULT_TEMPLATES};
+    use std::collections::BTreeSet;
+
+    #[test]
+    fn default_template_seed_contains_required_assignment_starters() {
+        let ids = DEFAULT_TEMPLATES
+            .iter()
+            .map(|template| template.id)
+            .collect::<BTreeSet<_>>();
+
+        assert!(ids.contains("math-problem-set"));
+        assert!(ids.contains("cited-paper-with-bibliography"));
+        assert!(ids.contains("figure-table-report"));
+    }
+
+    #[test]
+    fn default_snippet_seed_covers_core_latex_blocks() {
+        let categories = DEFAULT_SNIPPETS
+            .iter()
+            .map(|snippet| snippet.category)
+            .collect::<BTreeSet<_>>();
+
+        assert!(categories.contains("equation"));
+        assert!(categories.contains("table"));
+        assert!(categories.contains("figure"));
+        assert!(categories.contains("bibliography"));
+        assert!(DEFAULT_SNIPPETS.iter().all(|snippet| !snippet.trigger.is_empty()));
+    }
+
+    #[test]
+    fn template_input_cleans_main_file_and_bibliography() {
+        let cleaned = CleanTemplateInput::try_from(TemplateInput {
+            id: Some("custom-template".to_owned()),
+            name: "  Custom Template  ".to_owned(),
+            description: "  Description  ".to_owned(),
+            category: "  course  ".to_owned(),
+            main_file_name: "assignment".to_owned(),
+            body: "  body  ".to_owned(),
+            bibliography: Some("   ".to_owned()),
+        })
+        .expect("valid template should clean");
+
+        assert_eq!(cleaned.id, "custom-template");
+        assert_eq!(cleaned.name, "Custom Template");
+        assert_eq!(cleaned.category, "course");
+        assert_eq!(cleaned.main_file_name, "assignment.tex");
+        assert_eq!(cleaned.body, "body");
+        assert_eq!(cleaned.bibliography, None);
+    }
+}

@@ -7,6 +7,9 @@
     "dev": "vite --host 0.0.0.0 --port 8080",
     "build": "tsc && vite build",
     "preview": "vite preview --host 0.0.0.0 --port 8080",
+    "test": "npm run test:frontend && npm run test:rust",
+    "test:frontend": "tsx --test src/editor/snippetInsertion.test.ts src/components/snippets/snippetFiltering.test.ts",
+    "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build"
@@ -27,9 +30,11 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "2.11.4",
+    "@types/node": "^20.19.43",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
+    "tsx": "^4.23.1",
     "typescript": "^5.8.3",
     "vite": "^7.0.5"
   }

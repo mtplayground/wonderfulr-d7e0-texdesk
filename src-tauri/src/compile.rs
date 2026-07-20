@@ -422,3 +422,190 @@ fn binary_name(name: &str) -> String {
         name.to_owned()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{compile_document, CompileDocumentRequest, CompileError, CompileStrategy};
+    use std::fs;
+    use std::path::{Path, PathBuf};
+    use std::sync::Mutex;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    static TEST_ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    struct TestWorkspace {
+        root: PathBuf,
+        previous_toolchain_path: Option<String>,
+    }
+
+    impl TestWorkspace {
+        fn new(name: &str) -> Self {
+            let unique = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("test clock should be after Unix epoch")
+                .as_nanos();
+            let root = std::env::temp_dir().join(format!("texdesk-{name}-{unique}"));
+            fs::create_dir_all(root.join("bin")).expect("create fake toolchain directory");
+            let previous_toolchain_path = std::env::var("LATEX_TOOLCHAIN_PATH").ok();
+            std::env::set_var("LATEX_TOOLCHAIN_PATH", root.join("bin"));
+
+            Self {
+                root,
+                previous_toolchain_path,
+            }
+        }
+
+        fn bin_dir(&self) -> PathBuf {
+            self.root.join("bin")
+        }
+
+        fn write_source(&self, name: &str, contents: &str) {
+            fs::write(self.root.join(name), contents).expect("write source");
+        }
+
+        fn write_tool(&self, name: &str, body: &str) {
+            write_executable(&self.bin_dir().join(name), body);
+        }
+    }
+
+    impl Drop for TestWorkspace {
+        fn drop(&mut self) {
+            match &self.previous_toolchain_path {
+                Some(value) => std::env::set_var("LATEX_TOOLCHAIN_PATH", value),
+                None => std::env::remove_var("LATEX_TOOLCHAIN_PATH"),
+            }
+            let _ = fs::remove_dir_all(&self.root);
+        }
+    }
+
+    fn write_executable(path: &Path, body: &str) {
+        fs::write(path, body).expect("write fake executable");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut permissions = fs::metadata(path)
+                .expect("fake executable metadata")
+                .permissions();
+            permissions.set_mode(0o755);
+            fs::set_permissions(path, permissions).expect("chmod fake executable");
+        }
+    }
+
+    fn successful_latex_script(label: &str) -> String {
+        format!(
+            r#"#!/bin/sh
+if [ "$1" = "--version" ]; then
+  echo "{label} version"
+  exit 0
+fi
+last=""
+for arg in "$@"; do
+  last="$arg"
+done
+stem="${{last%.tex}}"
+echo "{label} compiling $last"
+printf "\\relax\n" > "$stem.aux"
+touch "$stem.pdf"
+exit 0
+"#,
+        )
+    }
+
+    #[test]
+    fn compile_prefers_latexmk_and_captures_log() {
+        let _guard = TEST_ENV_LOCK.lock().expect("lock test environment");
+        let workspace = TestWorkspace::new("latexmk");
+        workspace.write_source(
+            "main.tex",
+            "\\documentclass{article}\\begin{document}Hi\\end{document}",
+        );
+        workspace.write_tool("latexmk", &successful_latex_script("latexmk"));
+        workspace.write_tool("pdflatex", &successful_latex_script("pdflatex"));
+
+        let result = compile_document(CompileDocumentRequest {
+            workspace_root: workspace.root.display().to_string(),
+            path: "main.tex".to_owned(),
+        })
+        .expect("latexmk compile should succeed");
+
+        assert_eq!(result.pdf_path, "main.pdf");
+        assert!(matches!(result.toolchain.strategy, CompileStrategy::Latexmk));
+        assert_eq!(result.toolchain.engine, "latexmk");
+        assert!(result.log.contains("$ latexmk -pdf"));
+        assert!(result.log.contains("latexmk compiling main.tex"));
+    }
+
+    #[test]
+    fn compile_falls_back_to_manual_passes_with_bibliography() {
+        let _guard = TEST_ENV_LOCK.lock().expect("lock test environment");
+        let workspace = TestWorkspace::new("manual-bib");
+        workspace.write_source(
+            "paper.tex",
+            "\\documentclass{article}\\begin{document}\\cite{key}\\bibliography{references}\\end{document}",
+        );
+        workspace.write_tool("pdflatex", &successful_latex_script("pdflatex"));
+        workspace.write_tool(
+            "bibtex",
+            r#"#!/bin/sh
+if [ "$1" = "--version" ]; then
+  echo "bibtex version"
+  exit 0
+fi
+echo "bibtex compiling $1"
+touch "$1.bbl"
+exit 0
+"#,
+        );
+
+        let result = compile_document(CompileDocumentRequest {
+            workspace_root: workspace.root.display().to_string(),
+            path: "paper.tex".to_owned(),
+        })
+        .expect("manual compile should succeed");
+
+        assert_eq!(result.pdf_path, "paper.pdf");
+        assert!(matches!(
+            result.toolchain.strategy,
+            CompileStrategy::ManualPasses
+        ));
+        assert_eq!(result.toolchain.engine, "pdflatex");
+        assert_eq!(result.toolchain.bibliography_tool.as_deref(), Some("bibtex"));
+        assert_eq!(result.log.matches("pdflatex compiling paper.tex").count(), 3);
+        assert!(result.log.contains("bibtex compiling paper"));
+    }
+
+    #[test]
+    fn compile_error_includes_failing_process_log() {
+        let _guard = TEST_ENV_LOCK.lock().expect("lock test environment");
+        let workspace = TestWorkspace::new("failure-log");
+        workspace.write_source("broken.tex", "\\documentclass{article}");
+        workspace.write_tool(
+            "pdflatex",
+            r#"#!/bin/sh
+if [ "$1" = "--version" ]; then
+  echo "pdflatex version"
+  exit 0
+fi
+echo "fatal compile output"
+echo "fatal compile error" >&2
+exit 2
+"#,
+        );
+
+        let error = compile_document(CompileDocumentRequest {
+            workspace_root: workspace.root.display().to_string(),
+            path: "broken.tex".to_owned(),
+        })
+        .expect_err("compile should fail");
+
+        match error {
+            CompileError::ProcessFailed { tool, status, log } => {
+                assert_eq!(tool, "pdflatex");
+                assert_eq!(status, "exit code 2");
+                assert!(log.contains("fatal compile output"));
+                assert!(log.contains("fatal compile error"));
+            }
+            other => panic!("expected process failure, got {other:?}"),
+        }
+    }
+}
