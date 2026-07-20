@@ -1,3 +1,4 @@
+import { useAppConfig } from "../../config/useAppConfig";
 import { usePaneLayout } from "../../state/layoutState";
 
 function PaneResizer({
@@ -19,6 +20,15 @@ function PaneResizer({
 
 export default function ThreePaneLayout() {
   const { containerRef, layout, beginResize, resizeHandlers } = usePaneLayout();
+  const appConfig = useAppConfig();
+  const workspaceLabel =
+    appConfig.status === "ready" && appConfig.config.defaultWorkspaceRoot
+      ? appConfig.config.defaultWorkspaceRoot
+      : "No workspace selected";
+  const toolchainLabel =
+    appConfig.status === "ready" && appConfig.config.latexToolchainPath
+      ? appConfig.config.latexToolchainPath
+      : "System LaTeX";
 
   return (
     <main
@@ -34,6 +44,7 @@ export default function ThreePaneLayout() {
           <div>
             <p className="pane-kicker">Files</p>
             <h1>Workspace</h1>
+            <p className="pane-subtitle">{workspaceLabel}</p>
           </div>
         </header>
         <nav className="file-tree-preview" aria-label="Workspace files">
@@ -91,6 +102,7 @@ Start writing here.
           <div>
             <p className="pane-kicker">Preview</p>
             <h2>PDF</h2>
+            <p className="pane-subtitle">{toolchainLabel}</p>
           </div>
         </header>
         <div className="preview-sheet" aria-label="PDF preview placeholder">

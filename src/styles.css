@@ -81,6 +81,7 @@ button {
 }
 
 .pane-kicker,
+.pane-subtitle,
 .pane-header h1,
 .pane-header h2 {
   margin: 0;
@@ -100,6 +101,17 @@ button {
   color: #111827;
   font-size: 1rem;
   line-height: 1.2;
+}
+
+.pane-subtitle {
+  max-width: 100%;
+  margin-top: 5px;
+  overflow: hidden;
+  color: #607089;
+  font-size: 0.78rem;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .editor-header {
