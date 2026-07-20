@@ -10,6 +10,8 @@ import {
 import type { FsEntry } from "../../types/fs";
 
 type FileTreeProps = {
+  activePath: string | null;
+  onOpenFile: (path: string) => void;
   workspaceRoot: string | null;
 };
 
@@ -34,7 +36,11 @@ function displayError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-export default function FileTree({ workspaceRoot }: FileTreeProps) {
+export default function FileTree({
+  activePath,
+  onOpenFile,
+  workspaceRoot,
+}: FileTreeProps) {
   const [entriesByPath, setEntriesByPath] = useState<EntriesByPath>({});
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(
     () => new Set([ROOT_PATH]),
@@ -99,6 +105,9 @@ export default function FileTree({ workspaceRoot }: FileTreeProps) {
   async function toggleDirectory(entry: FsEntry) {
     if (entry.kind !== "directory") {
       setSelectedPath(entry.path);
+      if (entry.path.endsWith(".tex")) {
+        onOpenFile(entry.path);
+      }
       return;
     }
 
@@ -215,7 +224,7 @@ export default function FileTree({ workspaceRoot }: FileTreeProps) {
     return entries.map((entry) => {
       const isDirectory = entry.kind === "directory";
       const isExpanded = expandedPaths.has(entry.path);
-      const isSelected = selectedPath === entry.path;
+      const isSelected = selectedPath === entry.path || activePath === entry.path;
 
       return (
         <div className="tree-branch" key={entry.path}>
