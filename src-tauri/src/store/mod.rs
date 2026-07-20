@@ -1,4 +1,4 @@
-use rusqlite::{Connection, OptionalExtension};
+use rusqlite::{params, Connection, OptionalExtension};
 use serde::Serialize;
 use std::fmt;
 use std::fs;
@@ -82,6 +82,20 @@ pub struct StoreStatus {
     pub schema_version: i64,
 }
 
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceState {
+    pub last_workspace_root: Option<String>,
+    pub last_open_file: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecentProject {
+    pub workspace_root: String,
+    pub last_opened_at: String,
+}
+
 impl Store {
     pub fn initialize(app_handle: &AppHandle) -> Result<Self, StoreError> {
         let data_dir = app_handle.path().app_data_dir().map_err(StoreError::AppDataDir)?;
@@ -102,6 +116,100 @@ impl Store {
             database_path: self.database_path.display().to_string(),
             schema_version: self.schema_version()?,
         })
+    }
+
+    pub fn workspace_state(&self) -> Result<WorkspaceState, StoreError> {
+        let connection = self.connection()?;
+        connection
+            .query_row(
+                "SELECT last_workspace_root, last_open_file FROM workspace_state WHERE id = 1",
+                [],
+                |row| {
+                    Ok(WorkspaceState {
+                        last_workspace_root: row.get(0)?,
+                        last_open_file: row.get(1)?,
+                    })
+                },
+            )
+            .map_err(StoreError::Query)
+    }
+
+    pub fn remember_workspace_root(
+        &self,
+        workspace_root: &str,
+    ) -> Result<WorkspaceState, StoreError> {
+        let connection = self.connection()?;
+        connection
+            .execute(
+                "INSERT INTO recent_projects (workspace_root, last_opened_at)
+                 VALUES (?1, CURRENT_TIMESTAMP)
+                 ON CONFLICT(workspace_root)
+                 DO UPDATE SET last_opened_at = CURRENT_TIMESTAMP",
+                params![workspace_root],
+            )
+            .map_err(StoreError::Query)?;
+        connection
+            .execute(
+                "UPDATE workspace_state
+                 SET last_workspace_root = ?1, updated_at = CURRENT_TIMESTAMP
+                 WHERE id = 1",
+                params![workspace_root],
+            )
+            .map_err(StoreError::Query)?;
+        self.workspace_state()
+    }
+
+    pub fn remember_open_file(
+        &self,
+        workspace_root: &str,
+        path: &str,
+    ) -> Result<WorkspaceState, StoreError> {
+        let connection = self.connection()?;
+        connection
+            .execute(
+                "INSERT INTO recent_projects (workspace_root, last_opened_at)
+                 VALUES (?1, CURRENT_TIMESTAMP)
+                 ON CONFLICT(workspace_root)
+                 DO UPDATE SET last_opened_at = CURRENT_TIMESTAMP",
+                params![workspace_root],
+            )
+            .map_err(StoreError::Query)?;
+        connection
+            .execute(
+                "UPDATE workspace_state
+                 SET last_workspace_root = ?1,
+                     last_open_file = ?2,
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE id = 1",
+                params![workspace_root, path],
+            )
+            .map_err(StoreError::Query)?;
+        self.workspace_state()
+    }
+
+    pub fn recent_projects(&self, limit: i64) -> Result<Vec<RecentProject>, StoreError> {
+        let connection = self.connection()?;
+        let mut statement = connection
+            .prepare(
+                "SELECT workspace_root, last_opened_at
+                 FROM recent_projects
+                 ORDER BY last_opened_at DESC
+                 LIMIT ?1",
+            )
+            .map_err(StoreError::Query)?;
+        let rows = statement
+            .query_map(params![limit.max(1)], |row| {
+                Ok(RecentProject {
+                    workspace_root: row.get(0)?,
+                    last_opened_at: row.get(1)?,
+                })
+            })
+            .map_err(StoreError::Query)?;
+        let mut projects = Vec::new();
+        for row in rows {
+            projects.push(row.map_err(StoreError::Query)?);
+        }
+        Ok(projects)
     }
 
     fn connection(&self) -> Result<Connection, StoreError> {

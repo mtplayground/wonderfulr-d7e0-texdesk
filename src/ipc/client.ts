@@ -14,6 +14,7 @@ import type {
   WriteFileRequest,
 } from "../types/fs";
 import type { StoreStatus } from "../types/store";
+import type { RecentProject, WorkspaceState } from "../types/persistence";
 import {
   WORKSPACE_CHANGED_EVENT,
   type WorkspaceChangeEvent,
@@ -27,9 +28,13 @@ type CommandName =
   | "get_app_config"
   | "get_store_status"
   | "get_workspace_watcher_status"
+  | "get_workspace_state"
   | "list_workspace_entries"
+  | "list_recent_projects"
   | "ping"
   | "read_workspace_file"
+  | "remember_open_file"
+  | "remember_workspace_root"
   | "rename_workspace_entry"
   | "start_workspace_watcher"
   | "stop_workspace_watcher"
@@ -82,6 +87,37 @@ export async function getStoreStatus(): Promise<StoreStatus | null> {
   } catch {
     return null;
   }
+}
+
+export async function getWorkspaceState(): Promise<WorkspaceState | null> {
+  try {
+    return await invokeCommand<WorkspaceState>("get_workspace_state");
+  } catch {
+    return null;
+  }
+}
+
+export function rememberWorkspaceRoot(
+  workspaceRoot: string,
+): Promise<WorkspaceState> {
+  return invokeCommand<WorkspaceState>("remember_workspace_root", {
+    request: { workspaceRoot },
+  });
+}
+
+export function rememberOpenFile(
+  workspaceRoot: string,
+  path: string,
+): Promise<WorkspaceState> {
+  return invokeCommand<WorkspaceState>("remember_open_file", {
+    request: { workspaceRoot, path },
+  });
+}
+
+export function listRecentProjects(limit = 10): Promise<RecentProject[]> {
+  return invokeCommand<RecentProject[]>("list_recent_projects", {
+    request: { limit },
+  });
 }
 
 export function listWorkspaceEntries(
