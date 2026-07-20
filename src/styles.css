@@ -317,29 +317,28 @@ button {
   text-overflow: ellipsis;
 }
 
-.editor-textarea {
+.codemirror-editor {
   flex: 1;
   width: 100%;
   min-height: 0;
-  resize: none;
   overflow: auto;
-  padding: 18px;
-  color: #182235;
   background:
     linear-gradient(90deg, #f1f4f8 1px, transparent 1px) 0 0 / 52px 52px,
     #ffffff;
   border: 0;
-  outline: none;
-  font-family:
-    "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
-  font-size: 0.95rem;
-  line-height: 1.7;
-  letter-spacing: 0;
-  white-space: pre-wrap;
 }
 
-.editor-textarea:disabled {
-  color: #607089;
+.codemirror-editor .cm-editor {
+  height: 100%;
+  background: transparent;
+}
+
+.codemirror-editor .cm-scroller {
+  overflow: auto;
+}
+
+.codemirror-editor-disabled {
+  background: #f8fafc;
 }
 
 .editor-sync-warning {

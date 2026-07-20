@@ -10,6 +10,7 @@ import {
 import { useDocumentState } from "../../state/documentState";
 import { usePaneLayout } from "../../state/layoutState";
 import { useWorkspaceSync } from "../../state/workspaceSync";
+import CodeMirrorEditor from "../editor/CodeMirrorEditor";
 import FileTree from "../file-tree/FileTree";
 
 function PaneResizer({
@@ -188,14 +189,12 @@ export default function ThreePaneLayout() {
             </button>
           </div>
         </header>
-        <textarea
-          className="editor-textarea"
-          aria-label="Document editor"
+        <CodeMirrorEditor
+          ariaLabel="Document editor"
           disabled={!documentState.document || documentState.status === "loading"}
           value={documentState.document?.contents ?? ""}
-          placeholder="Select a .tex file"
-          spellCheck={false}
-          onChange={(event) => documentState.updateContents(event.target.value)}
+          placeholderText="Select a .tex file"
+          onChange={documentState.updateContents}
         />
         {documentState.externalChangePath ? (
           <div className="editor-sync-warning">
