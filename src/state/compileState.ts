@@ -5,7 +5,7 @@ import type { CompileResult } from "../types/compile";
 
 export type CompileStatus = "idle" | "running" | "success" | "failure";
 
-type CompileRunState = {
+export type CompileRunState = {
   error: string | null;
   finishedAt: number | null;
   result: CompileResult | null;

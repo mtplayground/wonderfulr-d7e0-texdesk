@@ -419,6 +419,121 @@ button {
   border-color: #f2c5c5;
 }
 
+.compile-log-panel {
+  flex: 0 0 auto;
+  border-top: 1px solid #d9e0ea;
+  background: #ffffff;
+}
+
+.compile-log-toggle {
+  display: flex;
+  width: 100%;
+  min-height: 34px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 18px;
+  color: #243047;
+  text-align: left;
+  background: #f8fafc;
+  border: 0;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.compile-log-toggle:hover,
+.compile-log-toggle:focus-visible {
+  background: #eaf0f8;
+  outline: none;
+}
+
+.compile-log-summary {
+  flex: 0 0 auto;
+  color: #607089;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.compile-log-body {
+  display: grid;
+  grid-template-rows: auto minmax(90px, 180px);
+  max-height: 300px;
+  min-height: 0;
+  border-top: 1px solid #d9e0ea;
+}
+
+.compile-diagnostics {
+  display: flex;
+  max-height: 118px;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  overflow: auto;
+  background: #ffffff;
+}
+
+.compile-diagnostic,
+.compile-diagnostics-empty {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: start;
+  padding: 7px 8px;
+  border: 1px solid;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.compile-diagnostics-empty {
+  display: block;
+  color: #607089;
+  background: #f8fafc;
+  border-color: #d9e0ea;
+}
+
+.compile-diagnostic-error {
+  color: #8a1f1f;
+  background: #fff1f1;
+  border-color: #f2c5c5;
+}
+
+.compile-diagnostic-warning {
+  color: #7a4d11;
+  background: #fff4d6;
+  border-color: #f1d288;
+}
+
+.compile-diagnostic-severity {
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.compile-diagnostic-message {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.compile-diagnostic-location {
+  color: #607089;
+  white-space: nowrap;
+}
+
+.compile-log-raw {
+  min-height: 0;
+  margin: 0;
+  padding: 10px 12px;
+  overflow: auto;
+  color: #182235;
+  background: #f8fafc;
+  border-top: 1px solid #d9e0ea;
+  font-family:
+    "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 0.76rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
 .workspace-pane-preview {
   display: flex;
   min-height: 0;
