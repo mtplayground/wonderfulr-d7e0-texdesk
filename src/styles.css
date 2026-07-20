@@ -146,13 +146,78 @@ button {
   outline: none;
 }
 
-.file-tree-preview {
+.file-tree {
   display: flex;
-  flex-direction: column;
-  gap: 3px;
+  flex: 1;
   min-height: 0;
-  padding: 10px 8px;
+  flex-direction: column;
+}
+
+.file-tree-actions {
+  display: grid;
+  grid-template-columns: repeat(4, 28px);
+  gap: 6px;
+  padding: 8px;
+  border-bottom: 1px solid #d9e0ea;
+  background: #f8fafc;
+}
+
+.file-tree-actions button {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  color: #243047;
+  background: #ffffff;
+  border: 1px solid #cfd8e5;
+  border-radius: 6px;
+  font-size: 0.76rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.file-tree-actions button:hover:not(:disabled),
+.file-tree-actions button:focus-visible {
+  background: #eaf0f8;
+  border-color: #9db2cd;
+  outline: none;
+}
+
+.file-tree-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.file-tree-error {
+  margin: 8px;
+  padding: 8px 10px;
+  overflow-wrap: anywhere;
+  color: #8a1f1f;
+  background: #fff1f1;
+  border: 1px solid #f2c5c5;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.file-tree-empty {
+  padding: 14px 12px;
+  color: #607089;
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+
+.file-tree-list {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  padding: 8px;
   overflow: auto;
+}
+
+.tree-branch {
+  display: contents;
 }
 
 .tree-row {
@@ -161,7 +226,7 @@ button {
   min-height: 34px;
   align-items: center;
   gap: 9px;
-  padding: 7px 9px;
+  padding: 7px 9px 7px 10px;
   overflow: hidden;
   color: #2c3647;
   text-align: left;
@@ -180,8 +245,11 @@ button {
   outline: none;
 }
 
-.tree-row-child {
-  padding-left: 28px;
+.tree-caret {
+  flex: 0 0 12px;
+  color: #718098;
+  font-size: 0.72rem;
+  line-height: 1;
 }
 
 .tree-icon {
@@ -198,6 +266,12 @@ button {
   border-radius: 3px 3px 2px 2px;
   background: #f8d98b;
   border-color: #b88923;
+}
+
+.tree-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .editor-surface {

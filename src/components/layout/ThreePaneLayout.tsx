@@ -1,5 +1,6 @@
 import { useAppConfig } from "../../config/useAppConfig";
 import { useStoreStatus } from "../../config/useStoreStatus";
+import FileTree from "../file-tree/FileTree";
 import { usePaneLayout } from "../../state/layoutState";
 
 function PaneResizer({
@@ -53,20 +54,11 @@ export default function ThreePaneLayout() {
             <p className="pane-subtitle">{workspaceLabel}</p>
           </div>
         </header>
-        <nav className="file-tree-preview" aria-label="Workspace files">
-          <button type="button" className="tree-row tree-row-active">
-            <span className="tree-icon" aria-hidden="true" />
-            assignment.tex
-          </button>
-          <button type="button" className="tree-row">
-            <span className="tree-icon tree-icon-folder" aria-hidden="true" />
-            figures
-          </button>
-          <button type="button" className="tree-row tree-row-child">
-            <span className="tree-icon" aria-hidden="true" />
-            notes.bib
-          </button>
-        </nav>
+        <FileTree
+          workspaceRoot={
+            appConfig.status === "ready" ? appConfig.config.defaultWorkspaceRoot : null
+          }
+        />
       </aside>
 
       <PaneResizer
