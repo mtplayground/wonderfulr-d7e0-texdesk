@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 import { getFrontendConfig } from "../config/appConfig";
 import type { AppConfig } from "../types/config";
@@ -13,6 +14,11 @@ import type {
   WriteFileRequest,
 } from "../types/fs";
 import type { StoreStatus } from "../types/store";
+import {
+  WORKSPACE_CHANGED_EVENT,
+  type WorkspaceChangeEvent,
+  type WorkspaceWatchStatus,
+} from "../types/sync";
 
 type CommandName =
   | "create_workspace_directory"
@@ -20,10 +26,13 @@ type CommandName =
   | "delete_workspace_entry"
   | "get_app_config"
   | "get_store_status"
+  | "get_workspace_watcher_status"
   | "list_workspace_entries"
   | "ping"
   | "read_workspace_file"
   | "rename_workspace_entry"
+  | "start_workspace_watcher"
+  | "stop_workspace_watcher"
   | "write_workspace_file";
 
 export type IpcError = {
@@ -111,4 +120,32 @@ export function deleteWorkspaceEntry(
   request: WorkspacePathRequest,
 ): Promise<DeleteResult> {
   return invokeCommand<DeleteResult>("delete_workspace_entry", { request });
+}
+
+export function startWorkspaceWatcher(
+  workspaceRoot: string,
+): Promise<WorkspaceWatchStatus> {
+  return invokeCommand<WorkspaceWatchStatus>("start_workspace_watcher", {
+    request: { workspaceRoot },
+  });
+}
+
+export function stopWorkspaceWatcher(): Promise<WorkspaceWatchStatus> {
+  return invokeCommand<WorkspaceWatchStatus>("stop_workspace_watcher");
+}
+
+export function getWorkspaceWatcherStatus(): Promise<WorkspaceWatchStatus> {
+  return invokeCommand<WorkspaceWatchStatus>("get_workspace_watcher_status");
+}
+
+export async function onWorkspaceChanged(
+  handler: (event: WorkspaceChangeEvent) => void,
+): Promise<UnlistenFn> {
+  try {
+    return await listen<WorkspaceChangeEvent>(WORKSPACE_CHANGED_EVENT, (event) => {
+      handler(event.payload);
+    });
+  } catch {
+    return () => undefined;
+  }
 }

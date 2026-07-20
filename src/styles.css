@@ -342,6 +342,16 @@ button {
   color: #607089;
 }
 
+.editor-sync-warning {
+  flex: 0 0 auto;
+  padding: 8px 18px;
+  color: #7a4d11;
+  background: #fff4d6;
+  border-top: 1px solid #f1d288;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
 .workspace-pane-preview {
   background: #eef2f6;
 }

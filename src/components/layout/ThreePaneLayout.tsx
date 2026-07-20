@@ -1,7 +1,10 @@
+import { useEffect } from "react";
+
 import { useAppConfig } from "../../config/useAppConfig";
 import { useStoreStatus } from "../../config/useStoreStatus";
 import { useDocumentState } from "../../state/documentState";
 import { usePaneLayout } from "../../state/layoutState";
+import { useWorkspaceSync } from "../../state/workspaceSync";
 import FileTree from "../file-tree/FileTree";
 
 function PaneResizer({
@@ -28,6 +31,8 @@ export default function ThreePaneLayout() {
   const workspaceRoot =
     appConfig.status === "ready" ? appConfig.config.defaultWorkspaceRoot : null;
   const documentState = useDocumentState(workspaceRoot);
+  const { handleWorkspaceChange } = documentState;
+  const workspaceSync = useWorkspaceSync(workspaceRoot);
   const workspaceLabel =
     workspaceRoot
       ? workspaceRoot
@@ -40,6 +45,12 @@ export default function ThreePaneLayout() {
     storeStatus.status === "ready" && storeStatus.store
       ? `Store v${storeStatus.store.schemaVersion}`
       : "Local store";
+
+  useEffect(() => {
+    if (workspaceSync.lastEvent) {
+      handleWorkspaceChange(workspaceSync.lastEvent.paths);
+    }
+  }, [handleWorkspaceChange, workspaceSync.lastEvent]);
 
   return (
     <main
@@ -61,6 +72,7 @@ export default function ThreePaneLayout() {
         <FileTree
           activePath={documentState.document?.path ?? null}
           onOpenFile={(path) => void documentState.openDocument(path)}
+          refreshKey={workspaceSync.refreshKey}
           workspaceRoot={workspaceRoot}
         />
       </aside>
@@ -77,7 +89,11 @@ export default function ThreePaneLayout() {
           <div>
             <p className="pane-kicker">Editor</p>
             <h2>{documentState.document?.path ?? "No document"}</h2>
-            <p className="pane-subtitle">{documentState.error ?? storeLabel}</p>
+            <p className="pane-subtitle">
+              {documentState.externalChangePath
+                ? "Changed on disk"
+                : documentState.error ?? workspaceSync.error ?? storeLabel}
+            </p>
           </div>
           <div className="editor-actions">
             <span className={`file-status${documentState.isDirty ? " is-dirty" : ""}`}>
@@ -102,6 +118,11 @@ export default function ThreePaneLayout() {
           spellCheck={false}
           onChange={(event) => documentState.updateContents(event.target.value)}
         />
+        {documentState.externalChangePath ? (
+          <div className="editor-sync-warning">
+            Open file changed on disk.
+          </div>
+        ) : null}
       </section>
 
       <PaneResizer
