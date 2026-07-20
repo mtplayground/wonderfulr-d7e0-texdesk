@@ -231,7 +231,7 @@ button {
 
 .file-tree-actions {
   display: grid;
-  grid-template-columns: repeat(4, 28px);
+  grid-template-columns: repeat(5, 28px);
   gap: 6px;
   padding: 8px;
   border-bottom: 1px solid #d9e0ea;
@@ -348,6 +348,190 @@ button {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.template-manager {
+  flex: 0 0 auto;
+  max-height: 58%;
+  min-height: 0;
+  border-top: 1px solid #d9e0ea;
+  background: #ffffff;
+}
+
+.template-manager-toggle {
+  display: flex;
+  width: 100%;
+  min-height: 34px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  color: #243047;
+  text-align: left;
+  background: #f8fafc;
+  border: 0;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.template-manager-toggle:hover,
+.template-manager-toggle:focus-visible {
+  background: #eaf0f8;
+  outline: none;
+}
+
+.template-manager-body {
+  display: grid;
+  grid-template-rows: auto auto minmax(84px, 120px) minmax(220px, 1fr);
+  max-height: calc(58vh - 34px);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.template-manager-actions {
+  display: flex;
+  gap: 6px;
+  padding: 8px;
+  border-top: 1px solid #d9e0ea;
+  border-bottom: 1px solid #d9e0ea;
+  background: #ffffff;
+}
+
+.template-manager-actions button,
+.template-editor button {
+  min-height: 28px;
+  padding: 0 9px;
+  color: #243047;
+  background: #ffffff;
+  border: 1px solid #cfd8e5;
+  border-radius: 6px;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.template-manager-actions button:hover:not(:disabled),
+.template-manager-actions button:focus-visible,
+.template-editor button:hover:not(:disabled),
+.template-editor button:focus-visible {
+  background: #eaf0f8;
+  border-color: #9db2cd;
+  outline: none;
+}
+
+.template-manager-actions button:disabled,
+.template-editor button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.template-manager-error {
+  margin: 8px;
+  padding: 8px 10px;
+  overflow-wrap: anywhere;
+  color: #8a1f1f;
+  background: #fff1f1;
+  border: 1px solid #f2c5c5;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.template-list {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px;
+  overflow: auto;
+  border-bottom: 1px solid #d9e0ea;
+}
+
+.template-list-item {
+  display: grid;
+  min-height: 34px;
+  gap: 2px;
+  padding: 7px 8px;
+  color: #2c3647;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+}
+
+.template-list-item:hover,
+.template-list-item:focus-visible,
+.template-list-item-active {
+  background: #eaf0f8;
+  border-color: #d2ddeb;
+  outline: none;
+}
+
+.template-list-item span,
+.template-list-item small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.template-list-item span {
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.template-list-item small,
+.template-empty {
+  color: #607089;
+  font-size: 0.72rem;
+}
+
+.template-editor {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  overflow: auto;
+}
+
+.template-editor label {
+  display: grid;
+  gap: 4px;
+}
+
+.template-editor label span {
+  color: #607089;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.template-editor input,
+.template-editor textarea {
+  width: 100%;
+  min-width: 0;
+  color: #172033;
+  background: #ffffff;
+  border: 1px solid #cfd8e5;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.template-editor input {
+  height: 30px;
+  padding: 0 8px;
+}
+
+.template-editor textarea {
+  min-height: 0;
+  padding: 7px 8px;
+  resize: vertical;
+}
+
+.template-editor input:focus,
+.template-editor textarea:focus {
+  border-color: #7f9bbd;
+  outline: 2px solid #dbeafe;
 }
 
 .codemirror-editor {

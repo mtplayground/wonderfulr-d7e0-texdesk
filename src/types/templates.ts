@@ -24,3 +24,17 @@ export type AppliedTemplate = {
   mainFile: FsEntry;
   bibliographyFile: FsEntry | null;
 };
+
+export type TemplateInput = {
+  id?: string;
+  name: string;
+  description: string;
+  category: string;
+  mainFileName: string;
+  body: string;
+  bibliography: string | null;
+};
+
+export type DeleteTemplateResult = {
+  deletedId: string;
+};

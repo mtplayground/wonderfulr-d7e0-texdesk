@@ -24,7 +24,9 @@ import {
 import type {
   AppliedTemplate,
   ApplyTemplateRequest,
+  DeleteTemplateResult,
   Template,
+  TemplateInput,
 } from "../types/templates";
 
 type CommandName =
@@ -32,6 +34,7 @@ type CommandName =
   | "compile_document"
   | "create_workspace_directory"
   | "create_workspace_file"
+  | "delete_template"
   | "delete_workspace_entry"
   | "get_app_config"
   | "get_store_status"
@@ -45,6 +48,7 @@ type CommandName =
   | "remember_open_file"
   | "remember_workspace_root"
   | "rename_workspace_entry"
+  | "save_template"
   | "start_workspace_watcher"
   | "stop_workspace_watcher"
   | "write_workspace_file";
@@ -137,6 +141,16 @@ export function applyTemplateToWorkspace(
   request: ApplyTemplateRequest,
 ): Promise<AppliedTemplate> {
   return invokeCommand<AppliedTemplate>("apply_template_to_workspace", { request });
+}
+
+export function saveTemplate(template: TemplateInput): Promise<Template> {
+  return invokeCommand<Template>("save_template", { request: { template } });
+}
+
+export function deleteTemplate(id: string): Promise<DeleteTemplateResult> {
+  return invokeCommand<DeleteTemplateResult>("delete_template", {
+    request: { id },
+  });
 }
 
 export function listWorkspaceEntries(

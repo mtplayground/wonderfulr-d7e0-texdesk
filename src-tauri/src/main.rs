@@ -18,6 +18,7 @@ fn main() -> tauri::Result<()> {
             commands::compile_document,
             commands::create_workspace_directory,
             commands::create_workspace_file,
+            commands::delete_template,
             commands::delete_workspace_entry,
             commands::get_app_config,
             commands::get_store_status,
@@ -31,6 +32,7 @@ fn main() -> tauri::Result<()> {
             commands::remember_open_file,
             commands::remember_workspace_root,
             commands::rename_workspace_entry,
+            commands::save_template,
             commands::start_workspace_watcher,
             commands::stop_workspace_watcher,
             commands::write_workspace_file

@@ -15,6 +15,7 @@ import CompileLogPanel from "../compile/CompileLogPanel";
 import CodeMirrorEditor from "../editor/CodeMirrorEditor";
 import FileTree from "../file-tree/FileTree";
 import PdfPreview from "../preview/PdfPreview";
+import TemplateManager from "../templates/TemplateManager";
 
 function PaneResizer({
   label,
@@ -166,6 +167,7 @@ export default function ThreePaneLayout() {
           refreshKey={workspaceSync.refreshKey}
           workspaceRoot={workspaceRoot}
         />
+        <TemplateManager />
       </aside>
 
       <PaneResizer
