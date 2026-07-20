@@ -96,6 +96,31 @@ pub struct RecentProject {
     pub last_opened_at: String,
 }
 
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Template {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub category: String,
+    pub main_file_name: String,
+    pub body: String,
+    pub bibliography: Option<String>,
+    pub is_default: bool,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+struct DefaultTemplate {
+    id: &'static str,
+    name: &'static str,
+    description: &'static str,
+    category: &'static str,
+    main_file_name: &'static str,
+    body: &'static str,
+    bibliography: Option<&'static str>,
+}
+
 impl Store {
     pub fn initialize(app_handle: &AppHandle) -> Result<Self, StoreError> {
         let data_dir = app_handle.path().app_data_dir().map_err(StoreError::AppDataDir)?;
@@ -212,6 +237,47 @@ impl Store {
         Ok(projects)
     }
 
+    pub fn templates(&self) -> Result<Vec<Template>, StoreError> {
+        let connection = self.connection()?;
+        let mut statement = connection
+            .prepare(
+                "SELECT id,
+                        name,
+                        description,
+                        category,
+                        main_file_name,
+                        body,
+                        bibliography,
+                        is_default,
+                        created_at,
+                        updated_at
+                 FROM templates
+                 ORDER BY is_default DESC, name ASC",
+            )
+            .map_err(StoreError::Query)?;
+        let rows = statement
+            .query_map([], |row| {
+                Ok(Template {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    description: row.get(2)?,
+                    category: row.get(3)?,
+                    main_file_name: row.get(4)?,
+                    body: row.get(5)?,
+                    bibliography: row.get(6)?,
+                    is_default: row.get::<_, i64>(7)? != 0,
+                    created_at: row.get(8)?,
+                    updated_at: row.get(9)?,
+                })
+            })
+            .map_err(StoreError::Query)?;
+        let mut templates = Vec::new();
+        for row in rows {
+            templates.push(row.map_err(StoreError::Query)?);
+        }
+        Ok(templates)
+    }
+
     fn connection(&self) -> Result<Connection, StoreError> {
         open_database(&self.database_path)
     }
@@ -220,7 +286,10 @@ impl Store {
         let connection = self.connection()?;
         connection
             .execute_batch(INITIAL_MIGRATION)
-            .map_err(StoreError::Migration)
+            .map_err(StoreError::Migration)?;
+        ensure_template_schema(&connection).map_err(StoreError::Migration)?;
+        seed_default_templates(&connection).map_err(StoreError::Migration)?;
+        Ok(())
     }
 
     fn schema_version(&self) -> Result<i64, StoreError> {
@@ -258,3 +327,234 @@ fn open_database(path: &Path) -> Result<Connection, StoreError> {
 
     Ok(connection)
 }
+
+fn ensure_template_schema(connection: &Connection) -> Result<(), rusqlite::Error> {
+    if !table_has_column(connection, "templates", "category")? {
+        connection.execute(
+            "ALTER TABLE templates ADD COLUMN category TEXT NOT NULL DEFAULT 'general'",
+            [],
+        )?;
+    }
+    if !table_has_column(connection, "templates", "main_file_name")? {
+        connection.execute(
+            "ALTER TABLE templates ADD COLUMN main_file_name TEXT NOT NULL DEFAULT 'main.tex'",
+            [],
+        )?;
+    }
+    if !table_has_column(connection, "templates", "bibliography")? {
+        connection.execute("ALTER TABLE templates ADD COLUMN bibliography TEXT", [])?;
+    }
+    if !table_has_column(connection, "templates", "is_default")? {
+        connection.execute(
+            "ALTER TABLE templates ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0 CHECK (is_default IN (0, 1))",
+            [],
+        )?;
+    }
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_templates_category ON templates (category, name)",
+        [],
+    )?;
+    Ok(())
+}
+
+fn table_has_column(
+    connection: &Connection,
+    table_name: &str,
+    column_name: &str,
+) -> Result<bool, rusqlite::Error> {
+    let mut statement = connection.prepare(&format!("PRAGMA table_info({table_name})"))?;
+    let rows = statement.query_map([], |row| row.get::<_, String>(1))?;
+
+    for row in rows {
+        if row? == column_name {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
+}
+
+fn seed_default_templates(connection: &Connection) -> Result<(), rusqlite::Error> {
+    for template in DEFAULT_TEMPLATES {
+        connection.execute(
+            "INSERT INTO templates (
+                id,
+                name,
+                description,
+                category,
+                main_file_name,
+                body,
+                bibliography,
+                is_default,
+                created_at,
+                updated_at
+             )
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+             ON CONFLICT(id) DO NOTHING",
+            params![
+                template.id,
+                template.name,
+                template.description,
+                template.category,
+                template.main_file_name,
+                template.body,
+                template.bibliography,
+            ],
+        )?;
+    }
+    Ok(())
+}
+
+const DEFAULT_TEMPLATES: &[DefaultTemplate] = &[
+    DefaultTemplate {
+        id: "math-problem-set",
+        name: "Math Problem Set",
+        description: "A concise homework layout with numbered problems, theorem notation, and aligned equations.",
+        category: "coursework",
+        main_file_name: "problem-set.tex",
+        body: r#"\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+
+\title{Problem Set Title}
+\author{Student Name}
+\date{\today}
+
+\newtheorem*{claim}{Claim}
+
+\begin{document}
+\maketitle
+
+\section*{Problem 1}
+State the problem in your own words before solving it.
+
+\begin{claim}
+For every integer $n \geq 1$,
+\[
+  \sum_{k=1}^{n} k = \frac{n(n+1)}{2}.
+\]
+\end{claim}
+
+\begin{proof}
+Use induction on $n$. The base case is immediate. For the induction step,
+\[
+  \sum_{k=1}^{n+1} k
+  = \frac{n(n+1)}{2} + (n+1)
+  = \frac{(n+1)(n+2)}{2}.
+\]
+\end{proof}
+
+\section*{Problem 2}
+Add the next solution here.
+
+\end{document}
+"#,
+        bibliography: None,
+    },
+    DefaultTemplate {
+        id: "cited-paper-with-bibliography",
+        name: "Cited Paper",
+        description: "A short academic paper starter with citations and a companion BibTeX bibliography.",
+        category: "paper",
+        main_file_name: "paper.tex",
+        body: r#"\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+
+\title{Paper Title}
+\author{Author Name}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Summarize the question, method, and main result in one compact paragraph.
+\end{abstract}
+
+\section{Introduction}
+Introduce the topic and motivate the research question. Knuth's work on TeX
+remains a useful reference point for high-quality technical typesetting
+\cite{knuth1984texbook}.
+
+\section{Method}
+Describe the materials, assumptions, and analysis plan. Keep notation explicit:
+\[
+  y = \beta_0 + \beta_1 x + \epsilon.
+\]
+
+\section{Results}
+Report the main findings and connect them back to the introduction.
+
+\section{Conclusion}
+State the takeaway and identify the next question.
+
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}
+"#,
+        bibliography: Some(
+            r#"@book{knuth1984texbook,
+  author = {Donald E. Knuth},
+  title = {The TeXbook},
+  year = {1984},
+  publisher = {Addison-Wesley},
+  address = {Reading, Massachusetts}
+}
+"#,
+        ),
+    },
+    DefaultTemplate {
+        id: "figure-table-report",
+        name: "Figure and Table Report",
+        description: "A lab or project report scaffold with a figure placeholder, summary table, and conclusion.",
+        category: "report",
+        main_file_name: "report.tex",
+        body: r#"\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+
+\title{Report Title}
+\author{Author Name}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{Overview}
+Describe the objective, context, and criteria for interpreting the results.
+
+\section{Results}
+Figure~\ref{fig:placeholder} reserves space for the main visual, and
+Table~\ref{tab:summary} summarizes the key measurements.
+
+\begin{figure}[h]
+  \centering
+  \fbox{\rule{0pt}{1.6in}\rule{0.82\linewidth}{0pt}}
+  \caption{Replace this placeholder with the primary figure.}
+  \label{fig:placeholder}
+\end{figure}
+
+\begin{table}[h]
+  \centering
+  \caption{Summary measurements}
+  \label{tab:summary}
+  \begin{tabular}{lrr}
+    \hline
+    Condition & Mean & Standard Deviation \\
+    \hline
+    Baseline & 12.4 & 1.3 \\
+    Treatment & 15.8 & 1.1 \\
+    Follow-up & 14.9 & 1.5 \\
+    \hline
+  \end{tabular}
+\end{table}
+
+\section{Discussion}
+Explain the implications, limitations, and next steps.
+
+\end{document}
+"#,
+        bibliography: None,
+    },
+];

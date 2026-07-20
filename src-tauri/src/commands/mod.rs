@@ -7,7 +7,7 @@ use crate::fs::{
     CreateFileRequest, DeleteResult, FileContent, FsEntry, FsError, ListWorkspaceRequest,
     RenameEntryRequest, WorkspacePathRequest, WriteFileRequest,
 };
-use crate::store::{RecentProject, Store, StoreError, StoreStatus, WorkspaceState};
+use crate::store::{RecentProject, Store, StoreError, StoreStatus, Template, WorkspaceState};
 use crate::watcher::{
     WatchWorkspaceRequest, WatcherError, WorkspaceWatchStatus, WorkspaceWatcherState,
 };
@@ -124,6 +124,11 @@ pub fn list_recent_projects(
     store
         .recent_projects(request.limit.unwrap_or(10))
         .map_err(CommandError::from)
+}
+
+#[tauri::command]
+pub fn list_templates(store: State<'_, Store>) -> CommandResult<Vec<Template>> {
+    store.templates().map_err(CommandError::from)
 }
 
 #[tauri::command]

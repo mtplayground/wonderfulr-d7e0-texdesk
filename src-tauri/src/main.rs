@@ -24,6 +24,7 @@ fn main() -> tauri::Result<()> {
             commands::get_workspace_state,
             commands::list_workspace_entries,
             commands::list_recent_projects,
+            commands::list_templates,
             commands::ping,
             commands::read_workspace_file,
             commands::remember_open_file,

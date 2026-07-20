@@ -21,6 +21,7 @@ import {
   type WorkspaceChangeEvent,
   type WorkspaceWatchStatus,
 } from "../types/sync";
+import type { Template } from "../types/templates";
 
 type CommandName =
   | "compile_document"
@@ -33,6 +34,7 @@ type CommandName =
   | "get_workspace_state"
   | "list_workspace_entries"
   | "list_recent_projects"
+  | "list_templates"
   | "ping"
   | "read_workspace_file"
   | "remember_open_file"
@@ -120,6 +122,10 @@ export function listRecentProjects(limit = 10): Promise<RecentProject[]> {
   return invokeCommand<RecentProject[]>("list_recent_projects", {
     request: { limit },
   });
+}
+
+export function listTemplates(): Promise<Template[]> {
+  return invokeCommand<Template[]>("list_templates");
 }
 
 export function listWorkspaceEntries(
