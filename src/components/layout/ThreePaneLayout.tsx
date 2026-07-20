@@ -195,6 +195,7 @@ export default function ThreePaneLayout() {
           value={documentState.document?.contents ?? ""}
           placeholderText="Select a .tex file"
           onChange={documentState.updateContents}
+          onSave={() => void documentState.saveDocument()}
         />
         {documentState.externalChangePath ? (
           <div className="editor-sync-warning">

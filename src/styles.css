@@ -337,6 +337,18 @@ button {
   overflow: auto;
 }
 
+.codemirror-editor .cm-matchingBracket {
+  color: #111827;
+  background: #dbeafe;
+  outline: 1px solid #93c5fd;
+}
+
+.codemirror-editor .cm-nonmatchingBracket {
+  color: #8a1f1f;
+  background: #fee2e2;
+  outline: 1px solid #fca5a5;
+}
+
 .codemirror-editor-disabled {
   background: #f8fafc;
 }

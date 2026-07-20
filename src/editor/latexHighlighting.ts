@@ -42,7 +42,13 @@ export const latexHighlightStyle = HighlightStyle.define([
 
 export function latexEditorExtensions() {
   return [
-    new LanguageSupport(latexLanguage),
+    new LanguageSupport(latexLanguage, [
+      latexLanguage.data.of({
+        commentTokens: {
+          line: "%",
+        },
+      }),
+    ]),
     syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
     syntaxHighlighting(latexHighlightStyle),
   ];
