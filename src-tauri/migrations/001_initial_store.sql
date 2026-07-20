@@ -22,7 +22,10 @@ CREATE TABLE IF NOT EXISTS snippets (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   description TEXT NOT NULL DEFAULT '',
+  category TEXT NOT NULL DEFAULT 'general',
+  trigger TEXT NOT NULL DEFAULT '',
   body TEXT NOT NULL,
+  is_default INTEGER NOT NULL DEFAULT 0 CHECK (is_default IN (0, 1)),
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -48,6 +51,7 @@ CREATE TABLE IF NOT EXISTS app_state (
 CREATE INDEX IF NOT EXISTS idx_templates_name ON templates (name);
 CREATE INDEX IF NOT EXISTS idx_templates_category ON templates (category, name);
 CREATE INDEX IF NOT EXISTS idx_snippets_name ON snippets (name);
+CREATE INDEX IF NOT EXISTS idx_snippets_category ON snippets (category, name);
 CREATE INDEX IF NOT EXISTS idx_recent_projects_last_opened_at
   ON recent_projects (last_opened_at DESC);
 

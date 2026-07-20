@@ -8,7 +8,8 @@ use crate::fs::{
     RenameEntryRequest, WorkspacePathRequest, WriteFileRequest,
 };
 use crate::store::{
-    RecentProject, Store, StoreError, StoreStatus, Template, TemplateInput, WorkspaceState,
+    RecentProject, Snippet, Store, StoreError, StoreStatus, Template, TemplateInput,
+    WorkspaceState,
 };
 use crate::watcher::{
     WatchWorkspaceRequest, WatcherError, WorkspaceWatchStatus, WorkspaceWatcherState,
@@ -165,6 +166,11 @@ pub fn list_recent_projects(
 #[tauri::command]
 pub fn list_templates(store: State<'_, Store>) -> CommandResult<Vec<Template>> {
     store.templates().map_err(CommandError::from)
+}
+
+#[tauri::command]
+pub fn list_snippets(store: State<'_, Store>) -> CommandResult<Vec<Snippet>> {
+    store.snippets().map_err(CommandError::from)
 }
 
 #[tauri::command]
