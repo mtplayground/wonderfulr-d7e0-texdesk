@@ -285,7 +285,7 @@ pub fn delete_entry(request: WorkspacePathRequest) -> Result<DeleteResult, FsErr
     })
 }
 
-fn canonical_workspace_root(root: &str) -> Result<PathBuf, FsError> {
+pub(crate) fn canonical_workspace_root(root: &str) -> Result<PathBuf, FsError> {
     let root_path = Path::new(root);
     let canonical_root = root_path
         .canonicalize()
@@ -298,7 +298,7 @@ fn canonical_workspace_root(root: &str) -> Result<PathBuf, FsError> {
     }
 }
 
-fn resolve_existing_path(root: &Path, relative_path: &str) -> Result<PathBuf, FsError> {
+pub(crate) fn resolve_existing_path(root: &Path, relative_path: &str) -> Result<PathBuf, FsError> {
     let candidate = root.join(clean_relative_path(relative_path)?);
     let canonical_candidate = candidate.canonicalize().map_err(|_| FsError::PathNotFound {
         path: relative_path.to_owned(),
@@ -385,7 +385,7 @@ fn entry_for_path(root: &Path, path: &Path) -> Result<FsEntry, FsError> {
     })
 }
 
-fn relative_path_string(root: &Path, path: &Path) -> Result<String, FsError> {
+pub(crate) fn relative_path_string(root: &Path, path: &Path) -> Result<String, FsError> {
     let relative_path = path.strip_prefix(root).map_err(|_| FsError::PathOutsideWorkspace {
         path: path.display().to_string(),
     })?;
