@@ -1,53 +1,31 @@
-# Architecture Plan
+Architecture plan for Issue #47: Add Linux and Windows setup instructions to README
 
-## Product Direction
+Scope:
+- Documentation-only change focused on README.md.
+- No application runtime, source module, IPC, Tauri, React, or Rust architecture changes are required.
 
-The issues define a single-user, offline desktop LaTeX editor built with Tauri, a React/TypeScript frontend, and a Rust core. The app centers on a three-pane workspace: filesystem tree on the left, CodeMirror LaTeX editor in the center, and PDF/log/template/snippet support around the editing and compile flow.
+Current project structure:
+- Frontend: React + TypeScript + Vite under src/.
+- Desktop shell/backend: Tauri 2 + Rust under src-tauri/.
+- Main commands/scripts live in package.json:
+  - npm run dev / build / preview
+  - npm run tauri:dev / tauri:build
+  - npm run test, test:frontend, test:rust
+- Rust backend dependencies and metadata live in src-tauri/Cargo.toml.
 
-## Module Structure
+README organization decision:
+- Keep the README concise but replace the placeholder with practical onboarding documentation.
+- Add platform-neutral prerequisites first, then separate Linux and Windows sections.
+- Include commands for install, development, tests, and production desktop build.
+- Mention environment variables from .env.example / config code:
+  - DEFAULT_WORKSPACE_ROOT or VITE_DEFAULT_WORKSPACE_ROOT
+  - LATEX_TOOLCHAIN_PATH or VITE_LATEX_TOOLCHAIN_PATH
+- Include LaTeX toolchain guidance because compilation depends on latexmk/pdflatex/xelatex and optional bibtex/biber.
 
-- `src/`: React/TypeScript frontend.
-  - `main.tsx`, `App.tsx`: application entry and top-level shell.
-  - `components/layout/`: resizable three-pane layout, pane persistence hooks.
-  - `components/file-tree/`: workspace tree, file/folder actions, context menus.
-  - `components/editor/`: CodeMirror 6 setup, LaTeX extensions, save and insert APIs.
-  - `components/preview/`: pdf.js preview with refresh on successful compile.
-  - `components/compile/`: compile button, run-state indicators, log/error panel.
-  - `components/library/`: template and snippet pickers/managers.
-  - `state/`: document state, workspace state, compile state, persisted UI state.
-  - `ipc/`: typed wrappers around Tauri commands/events.
-  - `types/`: shared TypeScript interfaces mirroring Rust command payloads.
-- `src-tauri/`: Rust core.
-  - `src/main.rs`: Tauri builder and command registration.
-  - `src/config.rs`: environment/default config loading.
-  - `src/commands/`: thin IPC command handlers.
-  - `src/fs.rs`: workspace-root guarded filesystem operations.
-  - `src/store/`: SQLite connection, migrations, templates, snippets, recents.
-  - `src/watcher.rs`: filesystem watch service and frontend events.
-  - `src/compile.rs`: LaTeX toolchain detection, process orchestration, log capture.
-  - `src/models.rs`: serde DTOs shared by command handlers.
-- `tests/` or colocated test modules: Rust unit tests for compile/library logic and frontend tests for template/snippet behavior.
-- `.env.example`: default workspace and optional LaTeX toolchain path overrides, introduced with issue #1.
+Dependencies between issues:
+- Only one issue is currently planned, so there are no inter-issue dependencies.
+- Future documentation changes should preserve these setup sections and update commands if package scripts change.
 
-## Shared Types And IPC
-
-Use explicit command DTOs with serde-compatible Rust structs and matching TypeScript interfaces. Keep command handlers thin: validate IPC inputs, call service modules, return typed success/error results. Use Tauri events for long-lived or asynchronous state updates such as filesystem watcher changes and compile progress. Represent errors with stable codes plus human-readable messages so the frontend can distinguish missing toolchain, guarded path rejection, I/O failure, dirty-file conflicts, and compile errors.
-
-## Issue Dependencies
-
-- Foundation: #1 scaffold, #2 layout, #3 IPC/config, #4 SQLite store.
-- Filesystem/document workflow: #5 guarded FS service enables #6 tree, #7 open/save, #8 watching, #9 recent/last-open restore.
-- Editor workflow: #10 CodeMirror depends on document/layout flow, #11 adds ergonomic keymaps, #20 later adds snippet insertion.
-- Compile/preview workflow: #12 compile service depends on FS, then #13 trigger state, #14 PDF preview, #15 log/error panel.
-- Library workflow: #16 templates and #19 snippets seed store data; #17 new-from-template and #18 template management build on template CRUD; #20 uses snippet data and editor insert API.
-- Quality/release: #21 unit tests cover compile and library logic after their modules exist; #22 validates template to edit to compile to preview against a real LaTeX install; #23 reviews error handling and Tauri native packaging.
-
-## Key Design Decisions
-
-- Keep all user data local in embedded SQLite; no external service or database is required.
-- Guard every filesystem operation by canonicalizing paths under the selected workspace root.
-- Persist UI state such as pane widths, recent projects, last-open file, and library seeds through the same local store where practical.
-- Treat the Rust core as the authority for filesystem, persistence, watching, and LaTeX process execution; the frontend owns interaction state and rendering.
-- Prefer `latexmk` when available, with `pdflatex`/`xelatex` fallback and bibliography passes handled in Rust so the UI receives a consistent run result.
-- Keep default templates and snippets versioned seed data with idempotent insertion to avoid duplicate records on app restart or migration.
-- Make error handling user-facing from the start: every service should return recoverable errors instead of panics, and issue #23 should become a polish/release pass rather than a rewrite.
+Validation plan:
+- Documentation change does not require code tests, but verify package scripts referenced in README exist.
+- Optionally run npm run build if code has changed; for README-only change, inspect rendered Markdown and command accuracy.
