@@ -73,10 +73,70 @@ function isIpcError(value: unknown): value is IpcError {
   return typeof candidate.code === "string" && typeof candidate.message === "string";
 }
 
+function hasTauriRuntime(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    "__TAURI_INTERNALS__" in window &&
+    Boolean((window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__)
+  );
+}
+
+function browserFallback<TResponse>(
+  command: CommandName,
+  args?: Record<string, unknown>,
+): TResponse {
+  switch (command) {
+    case "get_app_config":
+      return getFrontendConfig() as TResponse;
+    case "get_store_status":
+    case "get_workspace_state":
+      return null as TResponse;
+    case "remember_workspace_root": {
+      const request = args?.request as { workspaceRoot?: string } | undefined;
+      return {
+        lastWorkspaceRoot: request?.workspaceRoot ?? null,
+        lastOpenFile: null,
+      } as TResponse;
+    }
+    case "remember_open_file": {
+      const request = args?.request as
+        | { workspaceRoot?: string; path?: string }
+        | undefined;
+      return {
+        lastWorkspaceRoot: request?.workspaceRoot ?? null,
+        lastOpenFile: request?.path ?? null,
+      } as TResponse;
+    }
+    case "list_recent_projects":
+    case "list_templates":
+    case "list_snippets":
+    case "list_workspace_entries":
+      return [] as TResponse;
+    case "get_workspace_watcher_status":
+    case "start_workspace_watcher":
+    case "stop_workspace_watcher":
+      return { active: false, workspaceRoot: null } as TResponse;
+    case "ping":
+      return "browser" as TResponse;
+    default: {
+      const error = new Error(
+        "This desktop filesystem feature is unavailable in the web preview.",
+      ) as IpcCommandError;
+      error.name = "IpcCommandError";
+      error.code = "tauri_unavailable";
+      throw error;
+    }
+  }
+}
+
 async function invokeCommand<TResponse>(
   command: CommandName,
   args?: Record<string, unknown>,
 ): Promise<TResponse> {
+  if (!hasTauriRuntime()) {
+    return browserFallback<TResponse>(command, args);
+  }
+
   try {
     return await invoke<TResponse>(command, args);
   } catch (error) {
