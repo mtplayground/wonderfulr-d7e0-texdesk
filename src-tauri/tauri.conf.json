@@ -5,7 +5,7 @@
   "identifier": "com.mctai.wonderfulr-d7e0-texdesk",
   "build": {
     "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build",
+    "beforeBuildCommand": "cd .. && npm ci && npm run build",
     "devUrl": "http://localhost:8080",
     "frontendDist": "../dist"
   },
