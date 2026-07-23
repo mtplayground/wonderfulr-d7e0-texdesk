@@ -19,15 +19,16 @@ fn read_optional_env(keys: &[&str]) -> Option<String> {
 
 impl AppConfig {
     pub fn from_env() -> Self {
+        let explicit_latex_toolchain_path =
+            read_optional_env(&["LATEX_TOOLCHAIN_PATH", "VITE_LATEX_TOOLCHAIN_PATH"]);
+
         Self {
             default_workspace_root: read_optional_env(&[
                 "DEFAULT_WORKSPACE_ROOT",
                 "VITE_DEFAULT_WORKSPACE_ROOT",
             ]),
-            latex_toolchain_path: read_optional_env(&[
-                "LATEX_TOOLCHAIN_PATH",
-                "VITE_LATEX_TOOLCHAIN_PATH",
-            ]),
+            latex_toolchain_path: explicit_latex_toolchain_path
+                .or_else(crate::compile::detect_latex_toolchain_path),
         }
     }
 }
