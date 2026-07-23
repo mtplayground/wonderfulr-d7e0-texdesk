@@ -13,7 +13,7 @@
     "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "npm ci && cd src-tauri && ../node_modules/.bin/tauri build"
+    "tauri:build": "npm run tauri -- build"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",
