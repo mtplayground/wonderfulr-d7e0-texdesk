@@ -1,39 +1,39 @@
-Architecture plan for Issue #51: Bring tauri::Manager trait into scope in main.rs to fix manage() resolution
+Architecture plan for issues #53 and #54
 
-Scope:
-- Small Rust compile fix in the Tauri desktop entry point.
-- `src-tauri/src/main.rs` calls `app.manage(...)` inside `Builder::setup`; in Tauri this method is provided by the `tauri::Manager` trait, so the trait must be imported in the module where the method is called.
-- Expected implementation should only add `use tauri::Manager;` near the top of `src-tauri/src/main.rs` unless formatting/linting reveals a directly related issue.
+Repository shape
+- Desktop app: Tauri 2 Rust backend under src-tauri/ plus React 19/Vite/TypeScript frontend under src/.
+- Main UI shell: src/components/layout/ThreePaneLayout.tsx renders the three-pane workspace and owns the current workspaceRoot restore/update flow.
+- Workspace/file UI: src/components/file-tree/FileTree.tsx lists and mutates workspace entries through src/ipc/client.ts.
+- Layout sizing: src/state/layoutState.ts owns left/right pane default and minimum widths and persists them in localStorage.
+- Styling: src/styles.css contains pane headers, file-tree rows, toolbars, empty states, buttons, and ellipsis/wrapping behavior.
+- Tauri command surface: src-tauri/src/main.rs registers Rust commands; src-tauri/capabilities/default.json grants permissions. Existing app data persistence lives in src-tauri/src/store/mod.rs and is exposed through rememberWorkspaceRoot/getWorkspaceState.
 
-Current architecture relevant to this issue:
-- Frontend: React + TypeScript + Vite under `src/`.
-- Desktop shell/backend: Tauri 2 + Rust under `src-tauri/`.
-- Tauri app bootstrap is centralized in `src-tauri/src/main.rs`:
-  - Declares backend modules: `commands`, `compile`, `config`, `fs`, `store`, `watcher`.
-  - Creates the Tauri builder.
-  - Initializes the SQLite-backed `store::Store` during setup.
-  - Registers managed state with `app.manage(...)` for the store and workspace watcher.
-  - Registers all IPC commands through `tauri::generate_handler!`.
-- Runtime state consumers live in command handlers under `src-tauri/src/commands/mod.rs`, which receive `tauri::State<'_, Store>` and `tauri::State<'_, WorkspaceWatcherState>`.
+Issue #53: Add "Open Folder" workspace directory picker
+- Add Tauri dialog support using @tauri-apps/plugin-dialog on the frontend and tauri-plugin-dialog on the Rust side.
+- Register the Rust plugin in src-tauri/src/main.rs with the Tauri builder.
+- Grant the plugin's directory-open permission in src-tauri/capabilities/default.json; verify the exact permission identifier from the installed plugin version/schema after adding the dependency.
+- Add a small frontend abstraction, likely in src/ipc/client.ts or a new src/ipc/dialog.ts, that calls dialog.open({ directory: true, multiple: false }) and normalizes cancellation to null.
+- Keep workspace selection state centralized in ThreePaneLayout. Add a handleOpenFolder function that opens the native picker, sets restoreState.workspaceRoot, clears/restores lastOpenFile as appropriate, and lets the existing rememberWorkspaceRoot effect persist it.
+- Add an Open Folder action in the left-pane header and a prominent no-workspace empty state button. The no-workspace state should replace the passive "No workspace selected" experience and feed the selected directory into the existing FileTree loading path.
+- Browser/Vite preview should fail gracefully because Tauri dialog APIs are unavailable; surface the existing tauri_unavailable style message rather than pretending local FS is usable.
 
-Module/file organization:
-- `src-tauri/src/main.rs`: entry point and only required change location for Issue #51.
-- `src-tauri/src/store/mod.rs`: defines `Store`, initialized during setup and managed by Tauri.
-- `src-tauri/src/watcher/mod.rs`: defines `WorkspaceWatcherState`, also managed by Tauri.
-- `src-tauri/src/commands/mod.rs`: command layer that depends on the managed state registered in `main.rs`.
-- No shared frontend types or IPC contracts need to change for this issue.
+Issue #54: Fix left-pane spacing and awkward item wrapping
+- Increase DEFAULT_LAYOUT.leftWidth and MIN_LEFT_WIDTH in src/state/layoutState.ts so the workspace header and file actions have enough room by default and while resizing.
+- Make left-pane header content a flex layout with min-width: 0 on the text column, non-shrinking action area, and ellipsis on long absolute workspace paths.
+- In FileTree, replace symbolic action labels (+, ++, T, R, x) with discoverable text labels or icon-like labels with clear aria-label/title text. Prefer text such as New file, New folder, Template, Rename, Delete if space allows.
+- Allow the file-tree action toolbar to flex-wrap with a gap instead of compressing into unreadable controls.
+- Ensure file-tree rows, row labels, nested path containers, and selected text nodes use min-width: 0 plus overflow hidden/text-overflow ellipsis/white-space nowrap so long names do not wrap or overflow.
+- Keep accessibility intact: preserve button type, disabled states, aria-labels, selected/current styling, and keyboard-visible affordances.
 
-Dependencies between issues:
-- Only Issue #51 is in this planning set, so there are no inter-issue dependencies.
-- This issue is foundational for Rust/Tauri compilation: any later issue requiring `cargo test`, `npm run tauri:build`, or Tauri command integration benefits from this fix because the app must compile before managed state can be registered.
+Dependencies and sequencing
+- #53 and #54 touch shared left-pane/header CSS and ThreePaneLayout/FileTree boundaries. Implement #53 first or keep its header action wrapper generic so #54 can refine spacing without reworking behavior.
+- #54 is mostly presentational but should account for the Open Folder button added by #53; header action CSS should be reusable for both the workspace picker and existing editor/file controls.
+- No database schema changes are needed. Workspace persistence already exists through rememberWorkspaceRoot/workspace_state.
+- No new backend IPC command is needed for #53 if using the official Tauri dialog plugin directly from the frontend; backend changes are limited to plugin registration/dependencies/capabilities.
 
-Key design decisions:
-- Keep the fix minimal and idiomatic: import the extension trait where the method is used.
-- Do not refactor app setup, state registration, command wiring, or module boundaries.
-- Preserve existing product name/brand/configuration from the repository and issue.
-- Validate with Rust compile/test tooling rather than relying only on static inspection.
-
-Implementation validation plan for the later issue session:
-- Add `use tauri::Manager;` to `src-tauri/src/main.rs`.
-- Run `cargo test --manifest-path src-tauri/Cargo.toml` or `npm run test:rust`.
-- Optionally run `npm run build` if frontend changes unexpectedly occur; none are expected for this issue.
+Validation plan
+- Run npm install if package-lock changes are required for the dialog dependency.
+- Run npm run build for TypeScript/Vite validation.
+- Run npm run test:frontend for frontend unit tests.
+- Run npm run test:rust after Rust dependency/capability changes.
+- Manually verify #53 with npm run tauri:dev because native directory picking cannot be fully validated in Vite browser preview.
