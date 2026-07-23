@@ -1,27 +1,24 @@
-Architecture plan for mtplayground/wonderfulr-d7e0-texdesk
+Architecture plan for issue batch
 
-Project shape and module structure
-- Desktop app built with Tauri 2: React/TypeScript/Vite frontend under src/ and Rust backend under src-tauri/.
-- Frontend entry points: src/main.tsx -> src/App.tsx -> src/components/layout/ThreePaneLayout.tsx.
-- UI is organized by feature folders under src/components/: layout, file-tree, editor, compile, preview, snippets, templates.
-- Frontend state hooks live under src/state/: documentState, compileState, layoutState, workspaceSync.
-- Frontend IPC boundary is centralized in src/ipc/client.ts, wrapping @tauri-apps/api invoke/listen with browser-preview fallbacks.
-- Shared frontend contracts live under src/types/ for compile, config, fs, persistence, snippets, store, sync, and templates.
-- Backend Tauri command facade lives in src-tauri/src/commands/mod.rs and delegates to Rust modules:
-  - fs: workspace-scoped file operations and path safety
-  - compile: latexmk/pdflatex/xelatex invocation and PDF output detection
-  - store: SQLite persistence, templates, snippets, recent projects, workspace state
-  - watcher: notify-based recursive workspace file watcher and workspace-changed events
-  - config: environment-derived app config
+Repository shape
+- Frontend: React 19 + TypeScript + Vite under src/.
+- Desktop backend: Tauri 2 Rust app under src-tauri/.
+- npm scripts in root package.json are the primary developer entry points; Tauri build orchestration also uses src-tauri/tauri.conf.json build.beforeBuildCommand.
 
-Issue dependency plan
-- Only Issue #59 is in scope for the implementation batch.
-- Issue #59 depends on the existing plugin-dialog resolution/source state being preserved: src/components/layout/ThreePaneLayout.tsx imports open from @tauri-apps/plugin-dialog, package.json/package-lock.json already include @tauri-apps/plugin-dialog ^2.7.2, and tsconfig.json already uses moduleResolution Bundler.
-- The issue is a build-pipeline hardening change, not an application feature change. Avoid editing UI/source code or re-changing tsconfig unless verification proves the expected state is absent.
+Issue #61: Make tauri:build script cross-platform for Windows PowerShell
+- Scope is limited to build script orchestration.
+- Primary file: package.json scripts.
+- Reference file: src-tauri/tauri.conf.json to confirm install/build ownership remains in beforeBuildCommand.
+- Current problematic command chains `npm ci && cd src-tauri && ../node_modules/.bin/tauri build`; this is non-portable in PowerShell and duplicates npm install work.
+- Target design: use npm script resolution so the local Tauri CLI is found through npm-managed PATH: `"tauri:build": "npm run tauri -- build"`.
+- Keep `"tauri": "tauri"` as the single shared local CLI indirection.
+- Check sibling scripts (`tauri:dev`, etc.) for hard-coded `../node_modules/.bin` or unnecessary `cd` patterns. Current `tauri:dev`: `tauri dev`, already portable.
 
-Key design decisions for Issue #59
-- Make dependency installation an unavoidable prerequisite for production/Tauri builds from a clean or stale checkout.
-- Preferred minimal implementation: update src-tauri/tauri.conf.json beforeBuildCommand to run npm ci before npm run build, e.g. `npm ci && npm run build`.
-- Avoid duplicate installs in normal frontend dev flow: do not add a global prebuild script if beforeBuildCommand alone satisfies tauri:build acceptance; npm run build should remain fast for developers who already installed dependencies.
-- Keep package manager choice consistent with the existing package-lock.json by using npm ci, not npm install/yarn/pnpm.
-- Verify by removing node_modules or using a clean checkout path, then running npm run tauri:build; if platform libraries block bundling, at minimum verify npm ci runs before tsc/vite and TS2307 for @tauri-apps/plugin-dialog is gone.
+Dependencies between issues
+- Only one issue is in this batch.
+- Issue #61 depends conceptually on the existing install-before-build guard: src-tauri/tauri.conf.json owns `npm ci && npm run build` via beforeBuildCommand, so root `tauri:build` should not run npm ci itself.
+
+Validation plan for implementation session
+- Update package.json script only unless sibling non-portable patterns are found.
+- Run `npm run build` for frontend type/build validation.
+- Prefer a lightweight Tauri CLI invocation check if full bundle build is impractical in the environment; full `npm run tauri:build` may require OS-specific Tauri dependencies and can be expensive.
