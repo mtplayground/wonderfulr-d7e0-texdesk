@@ -5,6 +5,8 @@ mod fs;
 mod store;
 mod watcher;
 
+use tauri::Manager;
+
 fn main() -> tauri::Result<()> {
     tauri::Builder::default()
         .setup(|app| {
