@@ -1,4 +1,6 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
+use std::env;
 use std::ffi::OsString;
 use std::fmt;
 use std::fs as stdfs;
@@ -385,6 +387,12 @@ fn find_tool(name: &str, toolchain_path: Option<&str>) -> Option<Tool> {
         name: name.to_owned(),
         path,
     })
+    .or_else(|| {
+        find_tool_in_known_paths(name).map(|path| Tool {
+            name: name.to_owned(),
+            path,
+        })
+    })
 }
 
 fn find_tool_in_override(name: &str, override_path: &str) -> Option<PathBuf> {
@@ -415,6 +423,204 @@ fn command_version_works(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
+fn find_tool_in_known_paths(name: &str) -> Option<PathBuf> {
+    get_known_toolchain_directories()
+        .into_iter()
+        .map(|directory| directory.join(binary_name(name)))
+        .find(|candidate| command_version_works(candidate))
+}
+
+pub(crate) fn detect_latex_toolchain_path() -> Option<String> {
+    const TOOLCHAIN_SENTINELS: &[&str] = &["latexmk", "pdflatex", "xelatex", "tectonic"];
+
+    get_known_toolchain_directories()
+        .into_iter()
+        .find(|directory| {
+            TOOLCHAIN_SENTINELS
+                .iter()
+                .any(|tool| command_version_works(&directory.join(binary_name(tool))))
+        })
+        .map(|directory| directory.display().to_string())
+}
+
+fn get_known_toolchain_directories() -> Vec<PathBuf> {
+    let mut directories = Vec::new();
+    let mut seen = HashSet::new();
+
+    #[cfg(test)]
+    append_test_toolchain_directories(&mut directories);
+    append_platform_toolchain_directories(&mut directories);
+
+    directories
+        .into_iter()
+        .filter(|directory| directory.is_dir())
+        .filter(|directory| seen.insert(normalize_known_directory_key(directory)))
+        .collect()
+}
+
+fn normalize_known_directory_key(directory: &Path) -> String {
+    directory.to_string_lossy().to_lowercase()
+}
+
+#[cfg(test)]
+fn append_test_toolchain_directories(directories: &mut Vec<PathBuf>) {
+    if let Some(path_dirs) = env::var_os("TEXDESK_TEST_KNOWN_TOOLCHAIN_DIRS") {
+        directories.extend(env::split_paths(&path_dirs));
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn append_platform_toolchain_directories(directories: &mut Vec<PathBuf>) {
+    if let Some(local_app_data) = env_path("LOCALAPPDATA") {
+        directories.push(
+            local_app_data
+                .join("Programs")
+                .join("MiKTeX")
+                .join("miktex")
+                .join("bin")
+                .join("x64"),
+        );
+        directories.push(
+            local_app_data
+                .join("Programs")
+                .join("MiKTeX")
+                .join("miktex")
+                .join("bin"),
+        );
+        directories.push(local_app_data.join("Programs").join("Tectonic"));
+        directories.push(local_app_data.join("Microsoft").join("WinGet").join("Links"));
+    }
+
+    for program_files_key in ["ProgramFiles", "ProgramFiles(x86)"] {
+        if let Some(program_files) = env_path(program_files_key) {
+            directories.push(
+                program_files
+                    .join("MiKTeX")
+                    .join("miktex")
+                    .join("bin")
+                    .join("x64"),
+            );
+            directories.push(
+                program_files
+                    .join("MiKTeX")
+                    .join("miktex")
+                    .join("bin"),
+            );
+            directories.push(program_files.join("Tectonic"));
+            directories.push(program_files.join("Tectonic").join("bin"));
+        }
+    }
+
+    append_texlive_year_directories(directories, &PathBuf::from(r"C:\texlive"));
+
+    if let Some(path_dirs) =
+        env::var_os("PATH").map(|path| env::split_paths(&path).collect::<Vec<_>>())
+    {
+        directories.extend(path_dirs);
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn append_platform_toolchain_directories(directories: &mut Vec<PathBuf>) {
+    directories.push(PathBuf::from("/Library/TeX/texbin"));
+    append_texlive_year_directories(directories, Path::new("/usr/local/texlive"));
+    directories.push(PathBuf::from("/opt/homebrew/bin"));
+    directories.push(PathBuf::from("/usr/local/bin"));
+    directories.push(PathBuf::from("/opt/local/bin"));
+    append_home_relative_directories(
+        directories,
+        &[
+            ".cargo/bin",
+            ".local/bin",
+            "Library/Application Support/Tectonic",
+        ],
+    );
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn append_platform_toolchain_directories(directories: &mut Vec<PathBuf>) {
+    append_texlive_year_directories(directories, Path::new("/usr/local/texlive"));
+    directories.push(PathBuf::from("/usr/local/bin"));
+    directories.push(PathBuf::from("/usr/bin"));
+    directories.push(PathBuf::from("/bin"));
+    directories.push(PathBuf::from("/snap/bin"));
+    directories.push(PathBuf::from("/opt/tectonic"));
+    directories.push(PathBuf::from("/opt/tectonic/bin"));
+    append_home_relative_directories(directories, &[".cargo/bin", ".local/bin"]);
+}
+
+#[cfg(not(any(unix, target_os = "windows")))]
+fn append_platform_toolchain_directories(directories: &mut Vec<PathBuf>) {
+    if let Some(path_dirs) =
+        env::var_os("PATH").map(|path| env::split_paths(&path).collect::<Vec<_>>())
+    {
+        directories.extend(path_dirs);
+    }
+}
+
+fn append_texlive_year_directories(directories: &mut Vec<PathBuf>, root: &Path) {
+    let Ok(entries) = stdfs::read_dir(root) else {
+        return;
+    };
+
+    let mut years = entries
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| path.is_dir())
+        .filter_map(|path| {
+            let year = path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .filter(|name| {
+                    name.len() == 4 && name.chars().all(|character| character.is_ascii_digit())
+                })?
+                .to_owned();
+            Some((year, path))
+        })
+        .collect::<Vec<_>>();
+    years.sort_by(|left, right| right.0.cmp(&left.0));
+
+    for (_, year_dir) in years {
+        append_texlive_bin_directories(directories, &year_dir);
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn append_texlive_bin_directories(directories: &mut Vec<PathBuf>, year_dir: &Path) {
+    directories.push(year_dir.join("bin").join("windows"));
+}
+
+#[cfg(target_os = "macos")]
+fn append_texlive_bin_directories(directories: &mut Vec<PathBuf>, year_dir: &Path) {
+    directories.push(year_dir.join("bin").join("universal-darwin"));
+    directories.push(year_dir.join("bin").join("x86_64-darwin"));
+    directories.push(year_dir.join("bin").join("aarch64-darwin"));
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn append_texlive_bin_directories(directories: &mut Vec<PathBuf>, year_dir: &Path) {
+    directories.push(year_dir.join("bin").join("x86_64-linux"));
+    directories.push(year_dir.join("bin").join("aarch64-linux"));
+    directories.push(year_dir.join("bin").join(format!("{}-linux", env::consts::ARCH)));
+}
+
+#[cfg(not(any(unix, target_os = "windows")))]
+fn append_texlive_bin_directories(_directories: &mut Vec<PathBuf>, _year_dir: &Path) {}
+
+fn append_home_relative_directories(directories: &mut Vec<PathBuf>, relative_paths: &[&str]) {
+    let Some(home) = env_path("HOME").or_else(|| env_path("USERPROFILE")) else {
+        return;
+    };
+
+    directories.extend(relative_paths.iter().map(|relative| home.join(relative)));
+}
+
+fn env_path(key: &str) -> Option<PathBuf> {
+    env::var_os(key)
+        .map(PathBuf::from)
+        .filter(|path| !path.as_os_str().is_empty())
+}
+
 fn binary_name(name: &str) -> String {
     if cfg!(windows) {
         format!("{name}.exe")
@@ -426,8 +632,10 @@ fn binary_name(name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        compile_document, find_tool, CompileDocumentRequest, CompileError, CompileStrategy,
+        compile_document, detect_latex_toolchain_path, find_tool, CompileDocumentRequest,
+        CompileError, CompileStrategy,
     };
+    use std::ffi::OsString;
     use std::fs;
     use std::path::{Path, PathBuf};
     use std::sync::Mutex;
@@ -442,6 +650,31 @@ mod tests {
 
     struct TempWorkspace {
         root: PathBuf,
+    }
+
+    struct EnvVarGuard {
+        key: &'static str,
+        previous_value: Option<OsString>,
+    }
+
+    impl EnvVarGuard {
+        fn set_path(key: &'static str, path: &Path) -> Self {
+            let previous_value = std::env::var_os(key);
+            std::env::set_var(key, path);
+            Self {
+                key,
+                previous_value,
+            }
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            match &self.previous_value {
+                Some(value) => std::env::set_var(self.key, value),
+                None => std::env::remove_var(self.key),
+            }
+        }
     }
 
     impl TempWorkspace {
@@ -542,6 +775,54 @@ exit 0
         find_tool("latexmk", toolchain_path).is_some()
             || find_tool("pdflatex", toolchain_path).is_some()
             || find_tool("xelatex", toolchain_path).is_some()
+    }
+
+    #[test]
+    fn find_tool_discovers_executable_in_known_toolchain_directory() {
+        let _guard = TEST_ENV_LOCK.lock().expect("lock test environment");
+        let workspace = TempWorkspace::new("known-toolchain");
+        let known_bin = workspace.root.join("known-bin");
+        fs::create_dir_all(&known_bin).expect("create known toolchain directory");
+        let _known_dirs = EnvVarGuard::set_path("TEXDESK_TEST_KNOWN_TOOLCHAIN_DIRS", &known_bin);
+        write_executable(
+            &known_bin.join("texdesk-known-tool"),
+            r#"#!/bin/sh
+if [ "$1" = "--version" ]; then
+  echo "known tool version"
+  exit 0
+fi
+exit 1
+"#,
+        );
+
+        let tool = find_tool("texdesk-known-tool", None)
+            .expect("known-directory executable should be detected");
+
+        assert_eq!(tool.path, known_bin.join("texdesk-known-tool"));
+    }
+
+    #[test]
+    fn detect_latex_toolchain_path_returns_known_distribution_directory() {
+        let _guard = TEST_ENV_LOCK.lock().expect("lock test environment");
+        let workspace = TempWorkspace::new("known-distribution");
+        let known_bin = workspace.root.join("texlive").join("bin");
+        fs::create_dir_all(&known_bin).expect("create known distribution directory");
+        let _known_dirs = EnvVarGuard::set_path("TEXDESK_TEST_KNOWN_TOOLCHAIN_DIRS", &known_bin);
+        write_executable(
+            &known_bin.join("pdflatex"),
+            r#"#!/bin/sh
+if [ "$1" = "--version" ]; then
+  echo "pdfTeX version"
+  exit 0
+fi
+exit 1
+"#,
+        );
+
+        let detected = detect_latex_toolchain_path()
+            .expect("known distribution directory should be detected");
+
+        assert_eq!(detected, known_bin.display().to_string());
     }
 
     #[test]
