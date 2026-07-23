@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
+import { open } from "@tauri-apps/plugin-dialog";
 
 import { useAppConfig } from "../../config/useAppConfig";
 import { useStoreStatus } from "../../config/useStoreStatus";
+import { displayUserError } from "../../errors/appError";
 import {
   getWorkspaceState,
   rememberOpenFile,
@@ -19,6 +21,37 @@ import FileTree from "../file-tree/FileTree";
 import PdfPreview from "../preview/PdfPreview";
 import SnippetPicker from "../snippets/SnippetPicker";
 import TemplateManager from "../templates/TemplateManager";
+
+type CodedError = Error & {
+  code: string;
+};
+
+function hasTauriRuntime(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    "__TAURI_INTERNALS__" in window &&
+    Boolean((window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__)
+  );
+}
+
+async function pickWorkspaceDirectory(): Promise<string | null> {
+  if (!hasTauriRuntime()) {
+    const error = new Error(
+      "The native folder picker is only available in the desktop app.",
+    ) as CodedError;
+    error.name = "TauriUnavailableError";
+    error.code = "tauri_unavailable";
+    throw error;
+  }
+
+  return open({
+    canCreateDirectories: false,
+    directory: true,
+    multiple: false,
+    recursive: true,
+    title: "Open Workspace Folder",
+  });
+}
 
 function PaneResizer({
   label,
@@ -42,6 +75,9 @@ export default function ThreePaneLayout() {
   const editorRef = useRef<CodeMirrorEditorHandle | null>(null);
   const appConfig = useAppConfig();
   const storeStatus = useStoreStatus();
+  const [workspacePickerError, setWorkspacePickerError] = useState<string | null>(
+    null,
+  );
   const [restoreState, setRestoreState] = useState<{
     isReady: boolean;
     lastOpenFile: string | null;
@@ -76,6 +112,25 @@ export default function ThreePaneLayout() {
       : "Local store";
   const previewPdfPath = compileState.runState.result?.pdfPath ?? null;
   const previewRefreshKey = compileState.runState.finishedAt;
+
+  async function handleOpenFolder() {
+    setWorkspacePickerError(null);
+    try {
+      const selectedDirectory = await pickWorkspaceDirectory();
+      if (!selectedDirectory) {
+        return;
+      }
+
+      didRestoreFile.current = true;
+      setRestoreState({
+        isReady: true,
+        lastOpenFile: null,
+        workspaceRoot: selectedDirectory,
+      });
+    } catch (openError) {
+      setWorkspacePickerError(displayUserError(openError, "filesystem"));
+    }
+  }
 
   useEffect(() => {
     if (appConfig.status !== "ready") {
@@ -164,14 +219,46 @@ export default function ThreePaneLayout() {
             <h1>Workspace</h1>
             <p className="pane-subtitle">{workspaceLabel}</p>
           </div>
+          <button
+            type="button"
+            className="pane-header-action"
+            onClick={() => void handleOpenFolder()}
+          >
+            Open Folder
+          </button>
         </header>
-        <FileTree
-          activePath={documentState.document?.path ?? null}
-          onOpenFile={(path) => void documentState.openDocument(path)}
-          refreshKey={workspaceSync.refreshKey}
-          workspaceRoot={workspaceRoot}
-        />
-        <TemplateManager />
+        {workspacePickerError ? (
+          <div className="workspace-picker-error">{workspacePickerError}</div>
+        ) : null}
+        {workspaceRoot ? (
+          <>
+            <FileTree
+              activePath={documentState.document?.path ?? null}
+              onOpenFile={(path) => void documentState.openDocument(path)}
+              refreshKey={workspaceSync.refreshKey}
+              workspaceRoot={workspaceRoot}
+            />
+            <TemplateManager />
+          </>
+        ) : (
+          <section className="workspace-empty-state" aria-label="No workspace selected">
+            <div>
+              <p className="workspace-empty-kicker">Choose a workspace</p>
+              <h2>Open a folder of LaTeX files</h2>
+              <p>
+                Pick an existing directory to populate the file tree and start
+                editing your .tex documents.
+              </p>
+              <button
+                type="button"
+                className="workspace-empty-button"
+                onClick={() => void handleOpenFolder()}
+              >
+                Open Folder
+              </button>
+            </div>
+          </section>
+        )}
       </aside>
 
       <PaneResizer

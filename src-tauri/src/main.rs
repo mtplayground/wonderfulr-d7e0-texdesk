@@ -9,6 +9,7 @@ use tauri::Manager;
 
 fn main() -> tauri::Result<()> {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let store = store::Store::initialize(app.handle())?;
             app.manage(store);

@@ -26,6 +26,8 @@ const CODE_MESSAGES: Record<string, string> = {
   fs_path_not_found: "The file or folder no longer exists. Refresh the workspace tree and try again.",
   fs_path_outside_workspace:
     "The requested path is outside the workspace. Choose a file or folder inside the workspace root.",
+  tauri_unavailable:
+    "This desktop filesystem feature is unavailable in the web preview. Open the desktop app to choose a workspace folder.",
 };
 
 function asErrorParts(error: unknown): { code: string | null; message: string } {

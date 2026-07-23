@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "A local desktop LaTeX workspace."
 authors = ["mtplayground"]
 edition = "2021"
-rust-version = "1.77"
+rust-version = "1.77.2"
 
 [build-dependencies]
 tauri-build = { version = "2.5.1", features = [] }
@@ -14,3 +14,4 @@ notify = "6.1"
 rusqlite = { version = "0.32", features = ["bundled"] }
 serde = { version = "1.0", features = ["derive"] }
 tauri = { version = "2.11.5", features = [] }
+tauri-plugin-dialog = "2.7.2"
