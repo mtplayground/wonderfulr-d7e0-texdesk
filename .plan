@@ -1,39 +1,28 @@
-Architecture plan for issues #53 and #54
+Architecture plan for mtplayground/wonderfulr-d7e0-texdesk
 
-Repository shape
-- Desktop app: Tauri 2 Rust backend under src-tauri/ plus React 19/Vite/TypeScript frontend under src/.
-- Main UI shell: src/components/layout/ThreePaneLayout.tsx renders the three-pane workspace and owns the current workspaceRoot restore/update flow.
-- Workspace/file UI: src/components/file-tree/FileTree.tsx lists and mutates workspace entries through src/ipc/client.ts.
-- Layout sizing: src/state/layoutState.ts owns left/right pane default and minimum widths and persists them in localStorage.
-- Styling: src/styles.css contains pane headers, file-tree rows, toolbars, empty states, buttons, and ellipsis/wrapping behavior.
-- Tauri command surface: src-tauri/src/main.rs registers Rust commands; src-tauri/capabilities/default.json grants permissions. Existing app data persistence lives in src-tauri/src/store/mod.rs and is exposed through rememberWorkspaceRoot/getWorkspaceState.
+Project shape and module structure
+- Desktop app built with Tauri 2: React/TypeScript/Vite frontend under src/ and Rust backend under src-tauri/.
+- Frontend entry points: src/main.tsx -> src/App.tsx -> src/components/layout/ThreePaneLayout.tsx.
+- UI is organized by feature folders under src/components/: layout, file-tree, editor, compile, preview, snippets, templates.
+- Frontend state hooks live under src/state/: documentState, compileState, layoutState, workspaceSync.
+- Frontend IPC boundary is centralized in src/ipc/client.ts, which wraps @tauri-apps/api invoke/listen and exposes typed helpers.
+- Shared frontend data contracts live under src/types/ for compile, config, fs, persistence, snippets, store, sync, and templates.
+- Backend Tauri command facade lives in src-tauri/src/commands/mod.rs and delegates to Rust modules:
+  - fs: workspace-scoped file operations and path safety
+  - compile: latexmk/pdflatex/xelatex invocation and PDF output detection
+  - store: SQLite persistence, templates, snippets, recent projects, workspace state
+  - watcher: notify-based recursive workspace file watcher and workspace-changed events
+  - config: environment-derived app config
 
-Issue #53: Add "Open Folder" workspace directory picker
-- Add Tauri dialog support using @tauri-apps/plugin-dialog on the frontend and tauri-plugin-dialog on the Rust side.
-- Register the Rust plugin in src-tauri/src/main.rs with the Tauri builder.
-- Grant the plugin's directory-open permission in src-tauri/capabilities/default.json; verify the exact permission identifier from the installed plugin version/schema after adding the dependency.
-- Add a small frontend abstraction, likely in src/ipc/client.ts or a new src/ipc/dialog.ts, that calls dialog.open({ directory: true, multiple: false }) and normalizes cancellation to null.
-- Keep workspace selection state centralized in ThreePaneLayout. Add a handleOpenFolder function that opens the native picker, sets restoreState.workspaceRoot, clears/restores lastOpenFile as appropriate, and lets the existing rememberWorkspaceRoot effect persist it.
-- Add an Open Folder action in the left-pane header and a prominent no-workspace empty state button. The no-workspace state should replace the passive "No workspace selected" experience and feed the selected directory into the existing FileTree loading path.
-- Browser/Vite preview should fail gracefully because Tauri dialog APIs are unavailable; surface the existing tauri_unavailable style message rather than pretending local FS is usable.
+Issue dependency plan
+- Only Issue #57 is in scope for this planning batch.
+- Issue #57 depends on the existing Open Folder picker integration in src/components/layout/ThreePaneLayout.tsx, which imports open from @tauri-apps/plugin-dialog.
+- No application logic change is expected; the dependency is already declared in package.json/package-lock.json and the Rust plugin is declared in src-tauri/Cargo.toml.
+- The implementation session should focus on dependency installation and TypeScript resolver compatibility.
 
-Issue #54: Fix left-pane spacing and awkward item wrapping
-- Increase DEFAULT_LAYOUT.leftWidth and MIN_LEFT_WIDTH in src/state/layoutState.ts so the workspace header and file actions have enough room by default and while resizing.
-- Make left-pane header content a flex layout with min-width: 0 on the text column, non-shrinking action area, and ellipsis on long absolute workspace paths.
-- In FileTree, replace symbolic action labels (+, ++, T, R, x) with discoverable text labels or icon-like labels with clear aria-label/title text. Prefer text such as New file, New folder, Template, Rename, Delete if space allows.
-- Allow the file-tree action toolbar to flex-wrap with a gap instead of compressing into unreadable controls.
-- Ensure file-tree rows, row labels, nested path containers, and selected text nodes use min-width: 0 plus overflow hidden/text-overflow ellipsis/white-space nowrap so long names do not wrap or overflow.
-- Keep accessibility intact: preserve button type, disabled states, aria-labels, selected/current styling, and keyboard-visible affordances.
-
-Dependencies and sequencing
-- #53 and #54 touch shared left-pane/header CSS and ThreePaneLayout/FileTree boundaries. Implement #53 first or keep its header action wrapper generic so #54 can refine spacing without reworking behavior.
-- #54 is mostly presentational but should account for the Open Folder button added by #53; header action CSS should be reusable for both the workspace picker and existing editor/file controls.
-- No database schema changes are needed. Workspace persistence already exists through rememberWorkspaceRoot/workspace_state.
-- No new backend IPC command is needed for #53 if using the official Tauri dialog plugin directly from the frontend; backend changes are limited to plugin registration/dependencies/capabilities.
-
-Validation plan
-- Run npm install if package-lock changes are required for the dialog dependency.
-- Run npm run build for TypeScript/Vite validation.
-- Run npm run test:frontend for frontend unit tests.
-- Run npm run test:rust after Rust dependency/capability changes.
-- Manually verify #53 with npm run tauri:dev because native directory picking cannot be fully validated in Vite browser preview.
+Key design decisions for Issue #57
+- Keep the existing plugin import and Open Folder UI behavior unchanged.
+- Do not add or swap dependencies unless verification shows declarations are missing; the issue states they should already be present and pinned.
+- Update tsconfig.json moduleResolution from Node to Bundler to match the Vite + ESM frontend and packages that publish types through modern exports metadata.
+- Verify with npm ci first so node_modules/@tauri-apps/plugin-dialog exists before running npm run build.
+- Acceptance verification should include npm run build and, if platform dependencies permit, npm run tauri:build. If tauri:build is blocked by missing OS/webkit/LaTeX platform prerequisites, record the blocker precisely while ensuring TS2307 is resolved.
