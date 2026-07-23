@@ -445,8 +445,10 @@ fn find_tool(name: &str, toolchain_path: Option<&str>) -> Option<Tool> {
 fn find_tool_in_override(name: &str, override_path: &str) -> Option<PathBuf> {
     let path = Path::new(override_path);
     if path.is_dir() {
-        let candidate = path.join(binary_name(name));
-        return tool_is_detectable(name, &candidate).then_some(candidate);
+        return candidate_binary_names(name)
+            .into_iter()
+            .map(|binary| path.join(binary))
+            .find(|candidate| tool_is_detectable(name, candidate));
     }
 
     if path.is_file()
@@ -492,7 +494,11 @@ fn log_indicates_miktex_latexmk_missing_perl(log: &str) -> bool {
 fn find_tool_in_known_paths(name: &str) -> Option<PathBuf> {
     get_known_toolchain_directories()
         .into_iter()
-        .map(|directory| directory.join(binary_name(name)))
+        .flat_map(|directory| {
+            candidate_binary_names(name)
+                .into_iter()
+                .map(move |binary| directory.join(binary))
+        })
         .find(|candidate| tool_is_detectable(name, candidate))
 }
 
@@ -505,9 +511,16 @@ pub(crate) fn detect_latex_toolchain_path() -> Option<String> {
         .find(|directory| {
             TOOLCHAIN_SENTINELS
                 .iter()
-                .any(|&tool| tool_is_detectable(tool, &directory.join(binary_name(tool))))
+                .any(|&tool| directory_contains_detectable_tool(&directory, tool))
         })
         .map(|directory| directory.display().to_string())
+}
+
+fn directory_contains_detectable_tool(directory: &Path, name: &str) -> bool {
+    candidate_binary_names(name)
+        .into_iter()
+        .map(|binary| directory.join(binary))
+        .any(|candidate| tool_is_detectable(name, &candidate))
 }
 
 fn get_known_toolchain_directories() -> Vec<PathBuf> {
@@ -696,6 +709,18 @@ fn binary_name(name: &str) -> String {
     }
 }
 
+fn candidate_binary_names(name: &str) -> Vec<String> {
+    if cfg!(windows) {
+        vec![
+            format!("{name}.exe"),
+            format!("{name}.cmd"),
+            format!("{name}.bat"),
+        ]
+    } else {
+        vec![binary_name(name)]
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -717,6 +742,20 @@ mod tests {
 
     struct TempWorkspace {
         root: PathBuf,
+    }
+
+    struct FakeToolScript {
+        unix: String,
+        windows: String,
+    }
+
+    impl FakeToolScript {
+        fn new(unix: impl Into<String>, windows: impl Into<String>) -> Self {
+            Self {
+                unix: unix.into(),
+                windows: windows.into(),
+            }
+        }
     }
 
     struct EnvVarGuard {
@@ -787,8 +826,8 @@ mod tests {
             fs::write(self.root.join(name), contents).expect("write source");
         }
 
-        fn write_tool(&self, name: &str, body: &str) {
-            write_executable(&self.bin_dir().join(name), body);
+        fn write_tool(&self, name: &str, script: FakeToolScript) {
+            write_tool_script(&self.bin_dir(), name, script);
         }
     }
 
@@ -799,6 +838,25 @@ mod tests {
                 None => std::env::remove_var("LATEX_TOOLCHAIN_PATH"),
             }
             let _ = fs::remove_dir_all(&self.root);
+        }
+    }
+
+    fn write_tool_script(directory: &Path, name: &str, script: FakeToolScript) -> PathBuf {
+        let path = tool_script_path(directory, name);
+        let body = if cfg!(windows) {
+            script.windows
+        } else {
+            script.unix
+        };
+        write_executable(&path, &body);
+        path
+    }
+
+    fn tool_script_path(directory: &Path, name: &str) -> PathBuf {
+        if cfg!(windows) {
+            directory.join(format!("{name}.cmd"))
+        } else {
+            directory.join(name)
         }
     }
 
@@ -815,9 +873,10 @@ mod tests {
         }
     }
 
-    fn successful_latex_script(label: &str) -> String {
-        format!(
-            r#"#!/bin/sh
+    fn successful_latex_script(label: &str) -> FakeToolScript {
+        FakeToolScript::new(
+            format!(
+                r#"#!/bin/sh
 if [ "$1" = "--version" ]; then
   echo "{label} version"
   exit 0
@@ -832,6 +891,50 @@ printf "\\relax\n" > "$stem.aux"
 touch "$stem.pdf"
 exit 0
 "#,
+            ),
+            format!(
+                r#"@echo off
+if "%~1"=="--version" (
+  echo {label} version
+  exit /b 0
+)
+set "last="
+:next_arg
+if "%~1"=="" goto after_args
+set "last=%~1"
+shift
+goto next_arg
+:after_args
+set "stem=%last:.tex=%"
+echo {label} compiling %last%
+> "%stem%.aux" echo \relax
+type nul > "%stem%.pdf"
+exit /b 0
+"#,
+            ),
+        )
+    }
+
+    fn known_tool_script(label: &str) -> FakeToolScript {
+        FakeToolScript::new(
+            format!(
+                r#"#!/bin/sh
+if [ "$1" = "--version" ]; then
+  echo "{label} version"
+  exit 0
+fi
+exit 1
+"#,
+            ),
+            format!(
+                r#"@echo off
+if "%~1"=="--version" (
+  echo {label} version
+  exit /b 0
+)
+exit /b 1
+"#,
+            ),
         )
     }
 
@@ -852,21 +955,13 @@ exit 0
         let known_bin = workspace.root.join("known-bin");
         fs::create_dir_all(&known_bin).expect("create known toolchain directory");
         let _known_dirs = EnvVarGuard::set_path("TEXDESK_TEST_KNOWN_TOOLCHAIN_DIRS", &known_bin);
-        write_executable(
-            &known_bin.join("texdesk-known-tool"),
-            r#"#!/bin/sh
-if [ "$1" = "--version" ]; then
-  echo "known tool version"
-  exit 0
-fi
-exit 1
-"#,
-        );
+        let tool_path =
+            write_tool_script(&known_bin, "texdesk-known-tool", known_tool_script("known tool"));
 
         let tool = find_tool("texdesk-known-tool", None)
             .expect("known-directory executable should be detected");
 
-        assert_eq!(tool.path, known_bin.join("texdesk-known-tool"));
+        assert_eq!(tool.path, tool_path);
     }
 
     #[test]
@@ -876,16 +971,7 @@ exit 1
         let known_bin = workspace.root.join("texlive").join("bin");
         fs::create_dir_all(&known_bin).expect("create known distribution directory");
         let _known_dirs = EnvVarGuard::set_path("TEXDESK_TEST_KNOWN_TOOLCHAIN_DIRS", &known_bin);
-        write_executable(
-            &known_bin.join("pdflatex"),
-            r#"#!/bin/sh
-if [ "$1" = "--version" ]; then
-  echo "pdfTeX version"
-  exit 0
-fi
-exit 1
-"#,
-        );
+        write_tool_script(&known_bin, "pdflatex", known_tool_script("pdfTeX"));
 
         let detected = detect_latex_toolchain_path()
             .expect("known distribution directory should be detected");
@@ -901,8 +987,8 @@ exit 1
             "main.tex",
             "\\documentclass{article}\\begin{document}Hi\\end{document}",
         );
-        workspace.write_tool("latexmk", &successful_latex_script("latexmk"));
-        workspace.write_tool("pdflatex", &successful_latex_script("pdflatex"));
+        workspace.write_tool("latexmk", successful_latex_script("latexmk"));
+        workspace.write_tool("pdflatex", successful_latex_script("pdflatex"));
 
         let result = compile_document(CompileDocumentRequest {
             workspace_root: workspace.root.display().to_string(),
@@ -927,7 +1013,8 @@ exit 1
         );
         workspace.write_tool(
             "latexmk",
-            r#"#!/bin/sh
+            FakeToolScript::new(
+                r#"#!/bin/sh
 if [ "$1" = "--version" ]; then
   echo "MiKTeX could not find the script engine 'perl' which is required to execute 'latexmk'"
   exit 1
@@ -935,8 +1022,17 @@ fi
 echo "MiKTeX could not find the script engine 'perl' which is required to execute 'latexmk'"
 exit 1
 "#,
+                r#"@echo off
+if "%~1"=="--version" (
+  echo MiKTeX could not find the script engine 'perl' which is required to execute 'latexmk'
+  exit /b 1
+)
+echo MiKTeX could not find the script engine 'perl' which is required to execute 'latexmk'
+exit /b 1
+"#,
+            ),
         );
-        workspace.write_tool("pdflatex", &successful_latex_script("pdflatex"));
+        workspace.write_tool("pdflatex", successful_latex_script("pdflatex"));
 
         let result = compile_document(CompileDocumentRequest {
             workspace_root: workspace.root.display().to_string(),
@@ -962,7 +1058,8 @@ exit 1
         workspace.write_source("broken.tex", "\\documentclass{article}");
         workspace.write_tool(
             "latexmk",
-            r#"#!/bin/sh
+            FakeToolScript::new(
+                r#"#!/bin/sh
 if [ "$1" = "--version" ]; then
   echo "Latexmk version"
   exit 0
@@ -970,8 +1067,17 @@ fi
 echo "latexmk found a document error"
 exit 12
 "#,
+                r#"@echo off
+if "%~1"=="--version" (
+  echo Latexmk version
+  exit /b 0
+)
+echo latexmk found a document error
+exit /b 12
+"#,
+            ),
         );
-        workspace.write_tool("pdflatex", &successful_latex_script("pdflatex"));
+        workspace.write_tool("pdflatex", successful_latex_script("pdflatex"));
 
         let error = compile_document(CompileDocumentRequest {
             workspace_root: workspace.root.display().to_string(),
@@ -998,7 +1104,7 @@ exit 12
             "main.tex",
             "\\documentclass{article}\\begin{document}Hi\\end{document}",
         );
-        workspace.write_tool("lualatex", &successful_latex_script("lualatex"));
+        workspace.write_tool("lualatex", successful_latex_script("lualatex"));
 
         let result = compile_document(CompileDocumentRequest {
             workspace_root: workspace.root.display().to_string(),
@@ -1023,10 +1129,11 @@ exit 12
             "paper.tex",
             "\\documentclass{article}\\begin{document}\\cite{key}\\bibliography{references}\\end{document}",
         );
-        workspace.write_tool("pdflatex", &successful_latex_script("pdflatex"));
+        workspace.write_tool("pdflatex", successful_latex_script("pdflatex"));
         workspace.write_tool(
             "bibtex",
-            r#"#!/bin/sh
+            FakeToolScript::new(
+                r#"#!/bin/sh
 if [ "$1" = "--version" ]; then
   echo "bibtex version"
   exit 0
@@ -1035,6 +1142,16 @@ echo "bibtex compiling $1"
 touch "$1.bbl"
 exit 0
 "#,
+                r#"@echo off
+if "%~1"=="--version" (
+  echo bibtex version
+  exit /b 0
+)
+echo bibtex compiling %~1
+type nul > "%~1.bbl"
+exit /b 0
+"#,
+            ),
         );
 
         let result = compile_document(CompileDocumentRequest {
@@ -1061,7 +1178,8 @@ exit 0
         workspace.write_source("broken.tex", "\\documentclass{article}");
         workspace.write_tool(
             "pdflatex",
-            r#"#!/bin/sh
+            FakeToolScript::new(
+                r#"#!/bin/sh
 if [ "$1" = "--version" ]; then
   echo "pdflatex version"
   exit 0
@@ -1070,6 +1188,16 @@ echo "fatal compile output"
 echo "fatal compile error" >&2
 exit 2
 "#,
+                r#"@echo off
+if "%~1"=="--version" (
+  echo pdflatex version
+  exit /b 0
+)
+echo fatal compile output
+1>&2 echo fatal compile error
+exit /b 2
+"#,
+            ),
         );
 
         let error = compile_document(CompileDocumentRequest {
