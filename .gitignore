@@ -1,5 +1,10 @@
 target/
 node_modules/
+dist/
+src-tauri/gen/
+src-tauri/target/
+.env.local
+*.log
 .gh_token
 .database_url
 .task_id
