@@ -5,8 +5,8 @@ Project shape and module structure
 - Frontend entry points: src/main.tsx -> src/App.tsx -> src/components/layout/ThreePaneLayout.tsx.
 - UI is organized by feature folders under src/components/: layout, file-tree, editor, compile, preview, snippets, templates.
 - Frontend state hooks live under src/state/: documentState, compileState, layoutState, workspaceSync.
-- Frontend IPC boundary is centralized in src/ipc/client.ts, which wraps @tauri-apps/api invoke/listen and exposes typed helpers.
-- Shared frontend data contracts live under src/types/ for compile, config, fs, persistence, snippets, store, sync, and templates.
+- Frontend IPC boundary is centralized in src/ipc/client.ts, wrapping @tauri-apps/api invoke/listen with browser-preview fallbacks.
+- Shared frontend contracts live under src/types/ for compile, config, fs, persistence, snippets, store, sync, and templates.
 - Backend Tauri command facade lives in src-tauri/src/commands/mod.rs and delegates to Rust modules:
   - fs: workspace-scoped file operations and path safety
   - compile: latexmk/pdflatex/xelatex invocation and PDF output detection
@@ -15,14 +15,13 @@ Project shape and module structure
   - config: environment-derived app config
 
 Issue dependency plan
-- Only Issue #57 is in scope for this planning batch.
-- Issue #57 depends on the existing Open Folder picker integration in src/components/layout/ThreePaneLayout.tsx, which imports open from @tauri-apps/plugin-dialog.
-- No application logic change is expected; the dependency is already declared in package.json/package-lock.json and the Rust plugin is declared in src-tauri/Cargo.toml.
-- The implementation session should focus on dependency installation and TypeScript resolver compatibility.
+- Only Issue #59 is in scope for the implementation batch.
+- Issue #59 depends on the existing plugin-dialog resolution/source state being preserved: src/components/layout/ThreePaneLayout.tsx imports open from @tauri-apps/plugin-dialog, package.json/package-lock.json already include @tauri-apps/plugin-dialog ^2.7.2, and tsconfig.json already uses moduleResolution Bundler.
+- The issue is a build-pipeline hardening change, not an application feature change. Avoid editing UI/source code or re-changing tsconfig unless verification proves the expected state is absent.
 
-Key design decisions for Issue #57
-- Keep the existing plugin import and Open Folder UI behavior unchanged.
-- Do not add or swap dependencies unless verification shows declarations are missing; the issue states they should already be present and pinned.
-- Update tsconfig.json moduleResolution from Node to Bundler to match the Vite + ESM frontend and packages that publish types through modern exports metadata.
-- Verify with npm ci first so node_modules/@tauri-apps/plugin-dialog exists before running npm run build.
-- Acceptance verification should include npm run build and, if platform dependencies permit, npm run tauri:build. If tauri:build is blocked by missing OS/webkit/LaTeX platform prerequisites, record the blocker precisely while ensuring TS2307 is resolved.
+Key design decisions for Issue #59
+- Make dependency installation an unavoidable prerequisite for production/Tauri builds from a clean or stale checkout.
+- Preferred minimal implementation: update src-tauri/tauri.conf.json beforeBuildCommand to run npm ci before npm run build, e.g. `npm ci && npm run build`.
+- Avoid duplicate installs in normal frontend dev flow: do not add a global prebuild script if beforeBuildCommand alone satisfies tauri:build acceptance; npm run build should remain fast for developers who already installed dependencies.
+- Keep package manager choice consistent with the existing package-lock.json by using npm ci, not npm install/yarn/pnpm.
+- Verify by removing node_modules or using a clean checkout path, then running npm run tauri:build; if platform libraries block bundling, at minimum verify npm ci runs before tsc/vite and TS2307 for @tauri-apps/plugin-dialog is gone.
