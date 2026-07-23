@@ -293,6 +293,7 @@ export default function FileTree({
             className={`tree-row${isSelected ? " tree-row-active" : ""}`}
             style={{ paddingLeft: `${10 + depth * 16}px` }}
             aria-expanded={isDirectory ? isExpanded : undefined}
+            title={entry.path}
             onClick={() => void toggleDirectory(entry)}
           >
             <span className="tree-caret" aria-hidden="true">
@@ -317,38 +318,47 @@ export default function FileTree({
   return (
     <div className="file-tree">
       <div className="file-tree-actions" aria-label="File actions">
-        <button type="button" title="New file" onClick={() => void createEntry("file")}>
-          +
+        <button
+          type="button"
+          aria-label="New file"
+          title="New file"
+          onClick={() => void createEntry("file")}
+        >
+          New file
         </button>
         <button
           type="button"
+          aria-label="New folder"
           title="New folder"
           onClick={() => void createEntry("directory")}
         >
-          ++
+          New folder
         </button>
         <button
           type="button"
+          aria-label="New from template"
           title="New from template"
           onClick={() => void createFromTemplate()}
         >
-          T
+          Template
         </button>
         <button
           type="button"
+          aria-label="Rename selected item"
           title="Rename"
           disabled={!selectedEntry}
           onClick={() => void renameSelected()}
         >
-          R
+          Rename
         </button>
         <button
           type="button"
+          aria-label="Delete selected item"
           title="Delete"
           disabled={!selectedEntry}
           onClick={() => void deleteSelected()}
         >
-          x
+          Delete
         </button>
       </div>
       {error ? <div className="file-tree-error">{error}</div> : null}

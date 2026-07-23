@@ -13,11 +13,11 @@ type DragState = {
 
 const STORAGE_KEY = "texdesk:pane-layout";
 const DEFAULT_LAYOUT: PaneLayout = {
-  leftWidth: 280,
+  leftWidth: 360,
   rightWidth: 360,
 };
 
-const MIN_LEFT_WIDTH = 200;
+const MIN_LEFT_WIDTH = 320;
 const MIN_CENTER_WIDTH = 320;
 const MIN_RIGHT_WIDTH = 240;
 const RESIZER_WIDTH = 8;
