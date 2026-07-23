@@ -52,7 +52,7 @@ impl fmt::Display for CompileError {
             }
             Self::ToolchainUnavailable => write!(
                 formatter,
-                "no LaTeX compiler found; install latexmk, pdflatex, or xelatex"
+                "no LaTeX compiler found; install latexmk, pdflatex, xelatex, or lualatex"
             ),
             Self::Io { action, source } => write!(formatter, "{action} failed: {source}"),
             Self::ProcessFailed { tool, status, log } => {
@@ -149,12 +149,35 @@ pub fn compile_document(request: CompileDocumentRequest) -> Result<CompileResult
     let toolchain_path = config.latex_toolchain_path.as_deref();
 
     if let Some(latexmk) = find_tool("latexmk", toolchain_path) {
-        return run_latexmk(&root, &source_dir, &source_file, &pdf_path, latexmk);
+        match run_latexmk(&root, &source_dir, &source_file, &pdf_path, latexmk) {
+            Ok(result) => return Ok(result),
+            Err(error) if is_miktex_latexmk_missing_perl_failure(&error) => {
+                let fallback_log = latexmk_missing_perl_fallback_log(&error);
+                let Some(engine) = find_manual_engine(toolchain_path) else {
+                    return Err(error);
+                };
+                let fallback_engine_name = engine.name.clone();
+                let mut result = run_manual_passes(
+                    &root,
+                    &source_dir,
+                    &source_file,
+                    &source_stem,
+                    &source_path,
+                    &pdf_path,
+                    engine,
+                    toolchain_path,
+                )?;
+                result.log = format!(
+                    "{fallback_log}\n[texdesk] latexmk failed because MiKTeX could not find Perl; falling back to native engine {fallback_engine_name}.\n{}",
+                    result.log
+                );
+                return Ok(result);
+            }
+            Err(error) => return Err(error),
+        }
     }
 
-    let engine = find_tool("pdflatex", toolchain_path)
-        .or_else(|| find_tool("xelatex", toolchain_path))
-        .ok_or(CompileError::ToolchainUnavailable)?;
+    let engine = find_manual_engine(toolchain_path).ok_or(CompileError::ToolchainUnavailable)?;
     run_manual_passes(
         &root,
         &source_dir,
@@ -165,6 +188,30 @@ pub fn compile_document(request: CompileDocumentRequest) -> Result<CompileResult
         engine,
         toolchain_path,
     )
+}
+
+fn find_manual_engine(toolchain_path: Option<&str>) -> Option<Tool> {
+    ["pdflatex", "xelatex", "lualatex"]
+        .into_iter()
+        .find_map(|name| find_tool(name, toolchain_path))
+}
+
+fn is_miktex_latexmk_missing_perl_failure(error: &CompileError) -> bool {
+    let CompileError::ProcessFailed { tool, log, .. } = error else {
+        return false;
+    };
+    if !tool.eq_ignore_ascii_case("latexmk") {
+        return false;
+    }
+
+    log_indicates_miktex_latexmk_missing_perl(log)
+}
+
+fn latexmk_missing_perl_fallback_log(error: &CompileError) -> String {
+    match error {
+        CompileError::ProcessFailed { log, .. } => log.clone(),
+        other => other.to_string(),
+    }
 }
 
 fn run_latexmk(
@@ -383,7 +430,7 @@ fn find_tool(name: &str, toolchain_path: Option<&str>) -> Option<Tool> {
     }
 
     let path = PathBuf::from(name);
-    command_version_works(&path).then(|| Tool {
+    tool_is_detectable(name, &path).then(|| Tool {
         name: name.to_owned(),
         path,
     })
@@ -399,7 +446,7 @@ fn find_tool_in_override(name: &str, override_path: &str) -> Option<PathBuf> {
     let path = Path::new(override_path);
     if path.is_dir() {
         let candidate = path.join(binary_name(name));
-        return command_version_works(&candidate).then_some(candidate);
+        return tool_is_detectable(name, &candidate).then_some(candidate);
     }
 
     if path.is_file()
@@ -407,7 +454,7 @@ fn find_tool_in_override(name: &str, override_path: &str) -> Option<PathBuf> {
             .file_stem()
             .and_then(|stem| stem.to_str())
             .is_some_and(|stem| stem == name)
-        && command_version_works(path)
+        && tool_is_detectable(name, path)
     {
         return Some(path.to_path_buf());
     }
@@ -415,30 +462,50 @@ fn find_tool_in_override(name: &str, override_path: &str) -> Option<PathBuf> {
     None
 }
 
-fn command_version_works(path: &Path) -> bool {
-    Command::new(path)
-        .arg("--version")
-        .output()
-        .map(|output| output.status.success())
-        .unwrap_or(false)
+fn tool_is_detectable(name: &str, path: &Path) -> bool {
+    let Some(output) = command_version_output(path) else {
+        return false;
+    };
+
+    output.status.success()
+        || (name.eq_ignore_ascii_case("latexmk")
+            && output_indicates_miktex_latexmk_missing_perl(&output))
+}
+
+fn command_version_output(path: &Path) -> Option<Output> {
+    Command::new(path).arg("--version").output().ok()
+}
+
+fn output_indicates_miktex_latexmk_missing_perl(output: &Output) -> bool {
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    log_indicates_miktex_latexmk_missing_perl(&format!("{stdout}{stderr}"))
+}
+
+fn log_indicates_miktex_latexmk_missing_perl(log: &str) -> bool {
+    let lower_log = log.to_ascii_lowercase();
+    lower_log.contains("miktex")
+        && lower_log.contains("script engine")
+        && lower_log.contains("perl")
 }
 
 fn find_tool_in_known_paths(name: &str) -> Option<PathBuf> {
     get_known_toolchain_directories()
         .into_iter()
         .map(|directory| directory.join(binary_name(name)))
-        .find(|candidate| command_version_works(candidate))
+        .find(|candidate| tool_is_detectable(name, candidate))
 }
 
 pub(crate) fn detect_latex_toolchain_path() -> Option<String> {
-    const TOOLCHAIN_SENTINELS: &[&str] = &["latexmk", "pdflatex", "xelatex", "tectonic"];
+    const TOOLCHAIN_SENTINELS: &[&str] =
+        &["latexmk", "pdflatex", "xelatex", "lualatex", "tectonic"];
 
     get_known_toolchain_directories()
         .into_iter()
         .find(|directory| {
             TOOLCHAIN_SENTINELS
                 .iter()
-                .any(|tool| command_version_works(&directory.join(binary_name(tool))))
+                .any(|&tool| tool_is_detectable(tool, &directory.join(binary_name(tool))))
         })
         .map(|directory| directory.display().to_string())
 }
@@ -775,6 +842,7 @@ exit 0
         find_tool("latexmk", toolchain_path).is_some()
             || find_tool("pdflatex", toolchain_path).is_some()
             || find_tool("xelatex", toolchain_path).is_some()
+            || find_tool("lualatex", toolchain_path).is_some()
     }
 
     #[test]
@@ -847,6 +915,104 @@ exit 1
         assert_eq!(result.toolchain.engine, "latexmk");
         assert!(result.log.contains("$ latexmk -pdf"));
         assert!(result.log.contains("latexmk compiling main.tex"));
+    }
+
+    #[test]
+    fn compile_falls_back_when_miktex_latexmk_is_missing_perl() {
+        let _guard = TEST_ENV_LOCK.lock().expect("lock test environment");
+        let workspace = TestWorkspace::new("latexmk-missing-perl");
+        workspace.write_source(
+            "main.tex",
+            "\\documentclass{article}\\begin{document}Hi\\end{document}",
+        );
+        workspace.write_tool(
+            "latexmk",
+            r#"#!/bin/sh
+if [ "$1" = "--version" ]; then
+  echo "MiKTeX could not find the script engine 'perl' which is required to execute 'latexmk'"
+  exit 1
+fi
+echo "MiKTeX could not find the script engine 'perl' which is required to execute 'latexmk'"
+exit 1
+"#,
+        );
+        workspace.write_tool("pdflatex", &successful_latex_script("pdflatex"));
+
+        let result = compile_document(CompileDocumentRequest {
+            workspace_root: workspace.root.display().to_string(),
+            path: "main.tex".to_owned(),
+        })
+        .expect("MiKTeX latexmk missing Perl should fall back to pdflatex");
+
+        assert_eq!(result.pdf_path, "main.pdf");
+        assert!(matches!(
+            result.toolchain.strategy,
+            CompileStrategy::ManualPasses
+        ));
+        assert_eq!(result.toolchain.engine, "pdflatex");
+        assert!(result.log.contains("MiKTeX could not find the script engine 'perl'"));
+        assert!(result.log.contains("falling back to native engine pdflatex"));
+        assert_eq!(result.log.matches("pdflatex compiling main.tex").count(), 3);
+    }
+
+    #[test]
+    fn compile_does_not_fallback_for_regular_latexmk_failure() {
+        let _guard = TEST_ENV_LOCK.lock().expect("lock test environment");
+        let workspace = TestWorkspace::new("latexmk-regular-failure");
+        workspace.write_source("broken.tex", "\\documentclass{article}");
+        workspace.write_tool(
+            "latexmk",
+            r#"#!/bin/sh
+if [ "$1" = "--version" ]; then
+  echo "Latexmk version"
+  exit 0
+fi
+echo "latexmk found a document error"
+exit 12
+"#,
+        );
+        workspace.write_tool("pdflatex", &successful_latex_script("pdflatex"));
+
+        let error = compile_document(CompileDocumentRequest {
+            workspace_root: workspace.root.display().to_string(),
+            path: "broken.tex".to_owned(),
+        })
+        .expect_err("non-MiKTeX latexmk failures should not be retried");
+
+        match error {
+            CompileError::ProcessFailed { tool, status, log } => {
+                assert_eq!(tool, "latexmk");
+                assert_eq!(status, "exit code 12");
+                assert!(log.contains("latexmk found a document error"));
+                assert!(!log.contains("pdflatex compiling broken.tex"));
+            }
+            other => panic!("expected latexmk process failure, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn compile_uses_lualatex_when_other_native_engines_are_unavailable() {
+        let _guard = TEST_ENV_LOCK.lock().expect("lock test environment");
+        let workspace = TestWorkspace::new("lualatex");
+        workspace.write_source(
+            "main.tex",
+            "\\documentclass{article}\\begin{document}Hi\\end{document}",
+        );
+        workspace.write_tool("lualatex", &successful_latex_script("lualatex"));
+
+        let result = compile_document(CompileDocumentRequest {
+            workspace_root: workspace.root.display().to_string(),
+            path: "main.tex".to_owned(),
+        })
+        .expect("manual compile should use lualatex when pdflatex and xelatex are unavailable");
+
+        assert_eq!(result.pdf_path, "main.pdf");
+        assert!(matches!(
+            result.toolchain.strategy,
+            CompileStrategy::ManualPasses
+        ));
+        assert_eq!(result.toolchain.engine, "lualatex");
+        assert_eq!(result.log.matches("lualatex compiling main.tex").count(), 3);
     }
 
     #[test]
