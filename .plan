@@ -1,31 +1,42 @@
-Architecture plan for Issue #47: Add Linux and Windows setup instructions to README
+Architecture plan for Issue #49: Add Tauri app icon set to fix Windows tauri-build resource generation
 
 Scope:
-- Documentation-only change focused on README.md.
-- No application runtime, source module, IPC, Tauri, React, or Rust architecture changes are required.
+- Packaging/resource-only change for the existing Tauri desktop app.
+- Fix Windows tauri-build failure caused by missing src-tauri/icons/icon.ico.
+- Expected implementation should only touch src-tauri/tauri.conf.json and add icon assets under src-tauri/icons/.
+- Treat "package.metadata does not exist" as non-fatal build noise; do not expand scope to unrelated Cargo/package metadata changes.
 
-Current project structure:
-- Frontend: React + TypeScript + Vite under src/.
-- Desktop shell/backend: Tauri 2 + Rust under src-tauri/.
-- Main commands/scripts live in package.json:
-  - npm run dev / build / preview
-  - npm run tauri:dev / tauri:build
-  - npm run test, test:frontend, test:rust
-- Rust backend dependencies and metadata live in src-tauri/Cargo.toml.
+Current architecture relevant to this issue:
+- Frontend is React + TypeScript + Vite under src/, built to dist/ by npm run build.
+- Desktop shell/backend is Tauri 2 + Rust under src-tauri/.
+- Tauri configuration lives in src-tauri/tauri.conf.json.
+- Native bundle metadata is configured in tauri.conf.json under bundle.*.
+- The current bundle.icon array is empty, so tauri-build has no app icon resources to use when generating platform bundles.
 
-README organization decision:
-- Keep the README concise but replace the placeholder with practical onboarding documentation.
-- Add platform-neutral prerequisites first, then separate Linux and Windows sections.
-- Include commands for install, development, tests, and production desktop build.
-- Mention environment variables from .env.example / config code:
-  - DEFAULT_WORKSPACE_ROOT or VITE_DEFAULT_WORKSPACE_ROOT
-  - LATEX_TOOLCHAIN_PATH or VITE_LATEX_TOOLCHAIN_PATH
-- Include LaTeX toolchain guidance because compilation depends on latexmk/pdflatex/xelatex and optional bibtex/biber.
+Module/file organization:
+- Add standard Tauri icon files in src-tauri/icons/:
+  - icon.ico: required by Windows resource generation.
+  - icon.icns: macOS bundle icon.
+  - 32x32.png, 128x128.png, 128x128@2x.png: common cross-platform PNG icons.
+- Update src-tauri/tauri.conf.json bundle.icon to reference those paths relative to src-tauri, for example:
+  - icons/32x32.png
+  - icons/128x128.png
+  - icons/128x128@2x.png
+  - icons/icon.icns
+  - icons/icon.ico
+
+Key design decisions:
+- Use the product brand/name from the repository/issue: wonderfulr-d7e0-texdesk.
+- Prefer generating the whole icon set from one simple source image to keep assets visually consistent.
+- Keep icon assets static and committed; no runtime code path should depend on generation tooling.
+- Avoid changing React UI, Rust commands, IPC types, persistence, compile logic, or README unless a build tool requires it.
 
 Dependencies between issues:
-- Only one issue is currently planned, so there are no inter-issue dependencies.
-- Future documentation changes should preserve these setup sections and update commands if package scripts change.
+- Only Issue #49 is in this planning set, so there are no parallel inter-issue dependencies to coordinate.
+- Issue #49 depends conceptually on the existing Tauri packaging setup; implementation should preserve the current productName, identifier, bundle targets, and existing build scripts.
 
-Validation plan:
-- Documentation change does not require code tests, but verify package scripts referenced in README exist.
-- Optionally run npm run build if code has changed; for README-only change, inspect rendered Markdown and command accuracy.
+Validation plan for implementation session:
+- Confirm src-tauri/tauri.conf.json references all committed icon files.
+- Run npm run build to verify frontend/typecheck remains healthy.
+- Run npm run tauri:build when platform dependencies are available; at minimum verify the build proceeds past icon/resource lookup on the current platform.
+- If full bundling is blocked by missing OS packages/toolchain in the environment, document that and verify icon file existence plus config paths.

@@ -1,6 +1,5 @@
 target/
 node_modules/
-dist/
 .gh_token
 .database_url
 .task_id
