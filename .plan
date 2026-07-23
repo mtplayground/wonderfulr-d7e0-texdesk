@@ -1,24 +1,40 @@
-Architecture plan for issue batch
+Architecture plan for issues #63-#66
 
 Repository shape
-- Frontend: React 19 + TypeScript + Vite under src/.
+- Frontend: React + TypeScript + Vite under src/.
 - Desktop backend: Tauri 2 Rust app under src-tauri/.
-- npm scripts in root package.json are the primary developer entry points; Tauri build orchestration also uses src-tauri/tauri.conf.json build.beforeBuildCommand.
+- LaTeX compilation lives primarily in src-tauri/src/compile.rs.
+- Runtime configuration is exposed from src-tauri/src/config.rs to the frontend config types/hooks.
+- Ignore policy is managed in the repo-root .gitignore.
 
-Issue #61: Make tauri:build script cross-platform for Windows PowerShell
-- Scope is limited to build script orchestration.
-- Primary file: package.json scripts.
-- Reference file: src-tauri/tauri.conf.json to confirm install/build ownership remains in beforeBuildCommand.
-- Current problematic command chains `npm ci && cd src-tauri && ../node_modules/.bin/tauri build`; this is non-portable in PowerShell and duplicates npm install work.
-- Target design: use npm script resolution so the local Tauri CLI is found through npm-managed PATH: `"tauri:build": "npm run tauri -- build"`.
-- Keep `"tauri": "tauri"` as the single shared local CLI indirection.
-- Check sibling scripts (`tauri:dev`, etc.) for hard-coded `../node_modules/.bin` or unnecessary `cd` patterns. Current `tauri:dev`: `tauri dev`, already portable.
+Shared module/file organization
+- Keep tool discovery in src-tauri/src/compile.rs unless it grows large enough to justify a later toolchain module.
+- Use the existing internal Tool struct as the shared representation for detected tools: display name plus executable path.
+- Add small pure helpers for discovery:
+  - binary_name(name): existing executable-name normalization.
+  - candidate executable validation via --version.
+  - get_known_toolchain_directories(): returns likely bin directories for the current OS.
+  - find_tool_in_known_paths(name): scans those directories after explicit env override and PATH checks.
+  - optionally expose a config-facing helper that returns the detected active directory, avoiding duplicated path logic in config.rs.
+- Keep compile strategy metadata unchanged, extending only engine choices/log messages as needed.
 
-Dependencies between issues
-- Only one issue is in this batch.
-- Issue #61 depends conceptually on the existing install-before-build guard: src-tauri/tauri.conf.json owns `npm ci && npm run build` via beforeBuildCommand, so root `tauri:build` should not run npm ci itself.
+Issue dependencies and sequencing
+1. #66 is independent and can be done any time: add dist/, src-tauri/gen/, src-tauri/target/, .env.local, and *.log to .gitignore and untrack any matching build artifacts if present.
+2. #63 should land before #64 because fallback engine selection should reuse the broader tool discovery path.
+3. #64 depends on #63 discovery and updates compile_document() control flow to retry manual passes when MiKTeX latexmk fails due to missing Perl; also adds lualatex as an engine candidate.
+4. #65 depends on the compile tests added/updated for #63/#64, and should make fake tool executables work on Windows by writing .cmd stubs while preserving Unix shell stubs.
 
-Validation plan for implementation session
-- Update package.json script only unless sibling non-portable patterns are found.
-- Run `npm run build` for frontend type/build validation.
-- Prefer a lightweight Tauri CLI invocation check if full bundle build is impractical in the environment; full `npm run tauri:build` may require OS-specific Tauri dependencies and can be expensive.
+Key design decisions
+- Precedence: explicit LATEX_TOOLCHAIN_PATH / VITE_LATEX_TOOLCHAIN_PATH always wins, then process PATH, then known install directories.
+- Known Windows directories should include per-user MiKTeX under LOCALAPPDATA, system MiKTeX under Program Files, and TeX Live under C:\\texlive\\<year> bin paths; scan newest TeX Live years first when possible.
+- macOS/Linux discovery should cover common TeX Live/MacTeX and Tectonic locations without assuming shell startup files have populated PATH.
+- Detection should validate executables with --version, but compile-time fallback must distinguish latexmk's missing-Perl runtime failure from normal LaTeX failures to avoid hiding real document errors.
+- Manual engine preference should be deterministic, likely pdflatex, xelatex, then lualatex unless the existing UI/config later introduces an engine choice.
+- Logs should make fallback behavior visible so users can understand why latexmk was skipped and which native engine compiled the document.
+- Tests should avoid depending on real LaTeX installations except the existing ignored E2E-style test; unit tests should use temp fake toolchains and cross-platform script generation.
+
+Validation plan
+- Run npm test to cover TypeScript and Rust unit tests wired through the project test script.
+- Run cargo test --manifest-path src-tauri/Cargo.toml directly for backend changes.
+- Run npm run build for production TypeScript/Vite validation.
+- For real-machine acceptance, verify MiKTeX/TeX Live detection when the install bin directory is absent from PATH, and verify MiKTeX latexmk without Perl falls back to a native engine.
