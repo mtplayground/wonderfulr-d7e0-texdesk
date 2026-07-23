@@ -81,6 +81,7 @@ button {
 }
 
 .pane-header > div {
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -455,26 +456,28 @@ button {
 }
 
 .file-tree-actions {
-  display: grid;
-  grid-template-columns: repeat(5, 28px);
-  gap: 6px;
-  padding: 8px;
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
   border-bottom: 1px solid #d9e0ea;
   background: #f8fafc;
 }
 
 .file-tree-actions button {
-  display: grid;
-  width: 28px;
-  height: 28px;
-  place-items: center;
+  flex: 0 0 auto;
+  min-height: 30px;
+  padding: 0 10px;
   color: #243047;
   background: #ffffff;
   border: 1px solid #cfd8e5;
   border-radius: 6px;
-  font-size: 0.76rem;
+  font-size: 0.75rem;
   font-weight: 800;
   line-height: 1;
+  white-space: nowrap;
 }
 
 .file-tree-actions button:hover:not(:disabled),
@@ -514,6 +517,7 @@ button {
   flex: 1;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
   padding: 8px;
   overflow: auto;
 }
@@ -525,6 +529,7 @@ button {
 .tree-row {
   display: flex;
   width: 100%;
+  min-width: 0;
   min-height: 34px;
   align-items: center;
   gap: 9px;
@@ -571,9 +576,12 @@ button {
 }
 
 .tree-name {
+  display: block;
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .template-manager {
