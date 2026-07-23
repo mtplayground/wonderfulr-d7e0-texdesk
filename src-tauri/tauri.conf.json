@@ -32,6 +32,12 @@
     "shortDescription": "A local desktop LaTeX workspace.",
     "longDescription": "wonderfulr-d7e0-texdesk is a native desktop workspace for editing LaTeX course assignments, compiling them with a local TeX toolchain, and previewing the resulting PDF.",
     "targets": "all",
-    "icon": []
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
   }
 }
