@@ -13,29 +13,29 @@ export const latexLanguage = StreamLanguage.define(stex);
 export const latexHighlightStyle = HighlightStyle.define([
   {
     tag: tags.keyword,
-    color: "#1d4ed8",
+    color: "#cc7832",
     fontWeight: "700",
   },
   {
     tag: tags.atom,
-    color: "#7c3aed",
+    color: "#9876aa",
   },
   {
     tag: tags.string,
-    color: "#0f766e",
+    color: "#6a8759",
   },
   {
     tag: tags.comment,
-    color: "#6b7280",
+    color: "#808080",
     fontStyle: "italic",
   },
   {
     tag: tags.bracket,
-    color: "#475569",
+    color: "#a9b7c6",
   },
   {
     tag: tags.tagName,
-    color: "#be123c",
+    color: "#ffc66d",
     fontWeight: "700",
   },
 ]);
