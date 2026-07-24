@@ -1,40 +1,40 @@
-Architecture plan for issues #63-#66
+Architecture plan for issues #71-#73
 
 Repository shape
 - Frontend: React + TypeScript + Vite under src/.
-- Desktop backend: Tauri 2 Rust app under src-tauri/.
-- LaTeX compilation lives primarily in src-tauri/src/compile.rs.
-- Runtime configuration is exposed from src-tauri/src/config.rs to the frontend config types/hooks.
-- Ignore policy is managed in the repo-root .gitignore.
+- Desktop shell/backend: Tauri 2 Rust app under src-tauri/; no backend changes are needed for these UI-only issues.
+- Global app chrome styling is centralized in src/styles.css.
+- CodeMirror setup and editor chrome theme live in src/components/editor/CodeMirrorEditor.tsx.
+- LaTeX token highlighting lives in src/editor/latexHighlighting.ts.
 
-Shared module/file organization
-- Keep tool discovery in src-tauri/src/compile.rs unless it grows large enough to justify a later toolchain module.
-- Use the existing internal Tool struct as the shared representation for detected tools: display name plus executable path.
-- Add small pure helpers for discovery:
-  - binary_name(name): existing executable-name normalization.
-  - candidate executable validation via --version.
-  - get_known_toolchain_directories(): returns likely bin directories for the current OS.
-  - find_tool_in_known_paths(name): scans those directories after explicit env override and PATH checks.
-  - optionally expose a config-facing helper that returns the detected active directory, avoiding duplicated path logic in config.rs.
-- Keep compile strategy metadata unchanged, extending only engine choices/log messages as needed.
+Module structure, file organization, shared types
+- Keep the theme implementation CSS-first: introduce Darcula design tokens in :root in src/styles.css and migrate existing selectors to consume those tokens.
+- Do not add a theme state/store for this batch; the issues request a cohesive dark mode rather than runtime light/dark switching.
+- Treat the CSS token names from issue #71 as the shared theme contract for app chrome:
+  --bg-main, --bg-shell, --bg-panel, --bg-panel-alt, --bg-hover, --bg-editor,
+  --border, --border-soft, --text-main, --text-strong, --text-muted,
+  --accent, --accent-hover, --selection, --success, --warning, --danger.
+- Keep editor-specific CodeMirror colors in CodeMirrorEditor.tsx for now because issue #72 names exact CodeMirror target colors and that theme is defined in TypeScript, not CSS.
+- Keep syntax-specific colors in latexHighlighting.ts because they map directly to @lezer/highlight tags.
+- No new dependencies are required.
 
 Issue dependencies and sequencing
-1. #66 is independent and can be done any time: add dist/, src-tauri/gen/, src-tauri/target/, .env.local, and *.log to .gitignore and untrack any matching build artifacts if present.
-2. #63 should land before #64 because fallback engine selection should reuse the broader tool discovery path.
-3. #64 depends on #63 discovery and updates compile_document() control flow to retry manual passes when MiKTeX latexmk fails due to missing Perl; also adds lualatex as an engine candidate.
-4. #65 depends on the compile tests added/updated for #63/#64, and should make fake tool executables work on Windows by writing .cmd stubs while preserving Unix shell stubs.
+1. #71 should land first. It establishes the Darcula tokens and converts the workspace shell, panes, headers, controls, file tree, template manager, compile log, preview, status badges, errors, shadows, hover states, and scrollbars away from the current hardcoded light palette.
+2. #72 depends visually on #71. It updates the CodeMirror editor surface to match the dark app chrome while preserving existing editor extensions and behaviors.
+3. #73 depends visually on #72. It recolors LaTeX syntax tags so source text is readable and stylistically consistent on the #2b2b2b editor background.
 
 Key design decisions
-- Precedence: explicit LATEX_TOOLCHAIN_PATH / VITE_LATEX_TOOLCHAIN_PATH always wins, then process PATH, then known install directories.
-- Known Windows directories should include per-user MiKTeX under LOCALAPPDATA, system MiKTeX under Program Files, and TeX Live under C:\\texlive\\<year> bin paths; scan newest TeX Live years first when possible.
-- macOS/Linux discovery should cover common TeX Live/MacTeX and Tectonic locations without assuming shell startup files have populated PATH.
-- Detection should validate executables with --version, but compile-time fallback must distinguish latexmk's missing-Perl runtime failure from normal LaTeX failures to avoid hiding real document errors.
-- Manual engine preference should be deterministic, likely pdflatex, xelatex, then lualatex unless the existing UI/config later introduces an engine choice.
-- Logs should make fallback behavior visible so users can understand why latexmk was skipped and which native engine compiled the document.
-- Tests should avoid depending on real LaTeX installations except the existing ignored E2E-style test; unit tests should use temp fake toolchains and cross-platform script generation.
+- Use the exact palette from issue #71 for app chrome and state colors.
+- Set color-scheme: dark in :root so native controls match the dark UI.
+- Prefer Inter/system sans for UI chrome and JetBrains Mono/system monospace for editor/compile-log text.
+- Preserve current layout behavior and component structure; this is a visual/theme migration only.
+- Use compact IDE-like header spacing while keeping existing minimum pane/layout constraints.
+- Use subtle Darcula hover/focus treatments: hover background --bg-hover and accent borders instead of bright light outlines.
+- Ensure all previously white/light surfaces are migrated, including popovers, inputs, empty states, diagnostics, raw logs, preview background, PDF canvas borders/shadows, and disabled states.
+- Keep semantic status colors tokenized: success uses --success, warnings use --warning, failures/errors use --danger.
+- Avoid scattering new literals in src/styles.css except where issue #71 explicitly requests scrollbar colors or unavoidable derived values; prefer CSS variables for maintainability.
 
 Validation plan
-- Run npm test to cover TypeScript and Rust unit tests wired through the project test script.
-- Run cargo test --manifest-path src-tauri/Cargo.toml directly for backend changes.
-- Run npm run build for production TypeScript/Vite validation.
-- For real-machine acceptance, verify MiKTeX/TeX Live detection when the install bin directory is absent from PATH, and verify MiKTeX latexmk without Perl falls back to a native engine.
+- Run npm run build after each issue or after the full visual batch to validate TypeScript and Vite bundling.
+- Run npm run test:frontend to ensure existing editor/snippet/error tests still pass.
+- Manually inspect the app in dev/preview if possible to verify there are no leftover light backgrounds or low-contrast text.
