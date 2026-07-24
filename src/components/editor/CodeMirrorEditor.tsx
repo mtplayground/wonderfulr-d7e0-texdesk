@@ -49,45 +49,46 @@ export type CodeMirrorEditorHandle = {
 const editorTheme = EditorView.theme({
   "&": {
     height: "100%",
-    color: "#182235",
-    backgroundColor: "#ffffff",
+    color: "#a9b7c6",
+    backgroundColor: "#2b2b2b",
     fontSize: "0.95rem",
   },
   "&.cm-focused": {
     outline: "none",
   },
   ".cm-scroller": {
-    fontFamily: '"SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace',
+    fontFamily:
+      '"JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace',
     lineHeight: "1.7",
   },
   ".cm-content": {
     minHeight: "100%",
     padding: "18px 18px 18px 0",
-    caretColor: "#1d4ed8",
+    caretColor: "#a9b7c6",
   },
   ".cm-line": {
     padding: "0 4px 0 12px",
   },
   ".cm-gutters": {
-    backgroundColor: "#f1f4f8",
-    color: "#718098",
-    borderRight: "1px solid #d9e0ea",
+    backgroundColor: "#313335",
+    color: "#606366",
+    borderRight: "1px solid #55585a",
   },
   ".cm-activeLineGutter": {
-    backgroundColor: "#e5edf8",
-    color: "#243047",
+    backgroundColor: "#3a3d40",
+    color: "#d6dbe0",
   },
   ".cm-activeLine": {
-    backgroundColor: "#f5f8fc",
+    backgroundColor: "#323232",
   },
   ".cm-selectionBackground, &.cm-focused .cm-selectionBackground": {
-    backgroundColor: "#cfe0f7",
+    backgroundColor: "#214283",
   },
   ".cm-placeholder": {
-    color: "#607089",
+    color: "#808080",
   },
   "&.cm-editor-disabled": {
-    color: "#607089",
+    color: "#808080",
   },
 });
 
